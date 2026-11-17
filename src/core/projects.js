@@ -1,7 +1,7 @@
 // A project is one workspace tab: its view, its gravity and its drawing (scene).
 // Undo and redo keep earlier scenes in past and future. Step 3 adds saving to disk.
 import { emptyScene } from "./scene.js";
-import { newEnv } from "./env.js";
+import { newEnv, roomBounds } from "./env.js";
 
 export const DEFAULT_VIEW = { x: 0, y: 0, scale: 50 }; // scale = pixels per metre
 export const MIN_SCALE = 0.5; // 1%
@@ -22,6 +22,16 @@ export function newProject(number) {
     past: [],
     future: [],
   };
+}
+
+// A view that shows the whole room (when it is closed on all four sides). size = { w, h } of the canvas in pixels.
+export function fitRoom(env, size) {
+  const r = roomBounds(env);
+  if (!r || !size) return { ...DEFAULT_VIEW };
+  const pad = 40;
+  const fit = Math.min((size.w - 2 * pad) / (r.right - r.left), (size.h - 2 * pad) / (r.top - r.bottom));
+  const scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, fit));
+  return { x: (-(r.left + r.right) / 2) * scale, y: ((r.top + r.bottom) / 2) * scale, scale };
 }
 
 // Zoom about the middle of the canvas by a factor (1.25 = in, 0.8 = out)

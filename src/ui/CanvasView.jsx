@@ -22,7 +22,7 @@ const ARC_R = 30; // radius of the angle arcs in pixels
 
 export default function CanvasView({
   view, grid, axes, snap, tool, scene, selectedId, readOnly, env, pins,
-  onView, onCursor, onSelect, onAddItem, onBeginEdit, onLiveEdit, onFinish,
+  onView, onSize, onCursor, onSelect, onAddItem, onBeginEdit, onLiveEdit, onFinish,
 }) {
   const wrapRef = useRef(null);
   const canvasRef = useRef(null);
@@ -43,7 +43,11 @@ export default function CanvasView({
 
   useEffect(() => {
     const wrap = wrapRef.current;
-    const measure = () => setSize({ w: wrap.clientWidth, h: wrap.clientHeight });
+    const measure = () => {
+      const s = { w: wrap.clientWidth, h: wrap.clientHeight };
+      setSize(s);
+      if (onSize) onSize(s);
+    };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(wrap);
@@ -407,61 +411,99 @@ function chip(ctx, text, x, y) {
   ctx.textBaseline = "alphabetic";
 }
 
-// Ground, ceiling and side limits, drawn like the hatched surfaces in a textbook
+// The room: ground, ceiling and a wall on each side, drawn like the hatched surfaces in a textbook.
+// Everything outside the room is shaded, so it reads as a closed box and never as empty space.
+// If a side is out of view (zoomed in or panned away) a note at the edge says where it is.
 function drawEnv(ctx, w, h, toScreen, env) {
+  const FAR = 1e5;
+  const L = env.left.on ? toScreen({ x: env.left.x, y: 0 }).x : -FAR;
+  const R = env.right.on ? toScreen({ x: env.right.x, y: 0 }).x : FAR;
+  const T = env.ceiling.on ? toScreen({ x: 0, y: env.ceiling.y }).y : -FAR;
+  const B = env.ground.on ? toScreen({ x: 0, y: env.ground.y }).y : FAR;
+  const num = (n) => String(Math.round(n * 100) / 100);
+
   ctx.save();
-  ctx.strokeStyle = "#9aa8c7";
-  ctx.lineWidth = 2;
-  const across = (y, dir, name) => {
-    if (y < -30 || y > h + 30) return;
-    if (dir > 0 && y < h) {
-      ctx.fillStyle = "rgba(8,12,22,.55)";
-      ctx.fillRect(0, y, w, h - y);
-    }
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(w, y);
-    ctx.stroke();
+
+  // shade everything outside the room
+  const il = Math.max(L, 0);
+  const ir = Math.min(R, w);
+  const it = Math.max(T, 0);
+  const ib = Math.min(B, h);
+  ctx.fillStyle = "rgba(4,7,14,.72)";
+  ctx.beginPath();
+  ctx.rect(0, 0, w, h);
+  if (ir > il && ib > it) ctx.rect(il, it, ir - il, ib - it);
+  ctx.fill("evenodd");
+
+  // short slanted ticks along a line, leaning to the outside (nx, ny)
+  const hatch = (x1, y1, x2, y2, nx, ny) => {
+    const len = Math.hypot(x2 - x1, y2 - y1);
+    if (len < 1) return;
+    const ux = (x2 - x1) / len;
+    const uy = (y2 - y1) / len;
     ctx.lineWidth = 1;
     ctx.strokeStyle = "rgba(154,168,199,.45)";
-    for (let x = 0; x < w + 20; x += 14) {
+    for (let t = 0; t <= len; t += 14) {
+      const px = x1 + ux * t;
+      const py = y1 + uy * t;
       ctx.beginPath();
-      ctx.moveTo(x, y);
-      ctx.lineTo(x - 8, y + dir * 9);
+      ctx.moveTo(px, py);
+      ctx.lineTo(px + nx * 9 - ux * 8, py + ny * 9 - uy * 8);
       ctx.stroke();
     }
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = "#9aa8c7";
-    ctx.fillStyle = "#6f7b96";
-    ctx.font = `11px ${MONO}`;
-    ctx.textAlign = "right";
-    ctx.fillText(name, w - 10, y + (dir > 0 ? -6 : 14));
   };
-  const down = (x, dir, name) => {
-    if (x < -30 || x > w + 30) return;
+  const side = (x1, y1, x2, y2, nx, ny, name, tx, ty, align) => {
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "#b8c4e0";
     ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, h);
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
     ctx.stroke();
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = "rgba(154,168,199,.45)";
-    for (let y = 0; y < h + 20; y += 14) {
-      ctx.beginPath();
-      ctx.moveTo(x, y);
-      ctx.lineTo(x + dir * 9, y - 8);
-      ctx.stroke();
-    }
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = "#9aa8c7";
+    hatch(x1, y1, x2, y2, nx, ny);
     ctx.fillStyle = "#6f7b96";
     ctx.font = `11px ${MONO}`;
-    ctx.textAlign = dir > 0 ? "left" : "right";
-    ctx.fillText(name, x + dir * 12, 28);
+    ctx.textAlign = align;
+    ctx.fillText(name, tx, ty);
   };
-  if (env.ground.on) across(toScreen({ x: 0, y: env.ground.y }).y, 1, "ground");
-  if (env.ceiling.on) across(toScreen({ x: 0, y: env.ceiling.y }).y, -1, "ceiling");
-  if (env.left.on) down(toScreen({ x: env.left.x, y: 0 }).x, -1, "limit");
-  if (env.right.on) down(toScreen({ x: env.right.x, y: 0 }).x, 1, "limit");
+
+  // ground and ceiling stop at the walls, walls stop at the ground and ceiling, so the corners close
+  const xa = Math.max(L, -20);
+  const xb = Math.min(R, w + 20);
+  const ya = Math.max(T, -20);
+  const yb = Math.min(B, h + 20);
+  if (env.ground.on && B > -30 && B < h + 30 && xb > xa) side(xa, B, xb, B, 0, 1, "ground", Math.min(xb, w) - 10, B - 6, "right");
+  if (env.ceiling.on && T > -30 && T < h + 30 && xb > xa) side(xa, T, xb, T, 0, -1, "ceiling", Math.min(xb, w) - 10, T + 14, "right");
+  if (env.left.on && L > -30 && L < w + 30 && yb > ya) side(L, ya, L, yb, -1, 0, "wall", L - 12, 28, "right");
+  if (env.right.on && R > -30 && R < w + 30 && yb > ya) side(R, ya, R, yb, 1, 0, "wall", R + 12, 28, "left");
+
+  // a side that is out of view: a note at the edge of the screen says where it is
+  const notes = { left: [], right: [], top: [], bottom: [] };
+  const wallNote = (x, name) => {
+    const px = toScreen({ x, y: 0 }).x;
+    if (px <= -30) notes.left.push(`\u25C0 ${name} at x = ${num(x)} m`);
+    else if (px >= w + 30) notes.right.push(`${name} at x = ${num(x)} m \u25B6`);
+  };
+  const levelNote = (y, name) => {
+    const py = toScreen({ x: 0, y }).y;
+    if (py <= -30) notes.top.push(`\u25B2 ${name} at y = ${num(y)} m`);
+    else if (py >= h + 30) notes.bottom.push(`\u25BC ${name} at y = ${num(y)} m`);
+  };
+  if (env.left.on) wallNote(env.left.x, "left wall");
+  if (env.right.on) wallNote(env.right.x, "right wall");
+  if (env.ground.on) levelNote(env.ground.y, "ground");
+  if (env.ceiling.on) levelNote(env.ceiling.y, "ceiling");
+  ctx.fillStyle = "#8f9bb8";
+  ctx.font = `600 11px ${MONO}`;
+  const list = (items, x, y0, step, align) =>
+    items.forEach((t, i) => {
+      ctx.textAlign = align;
+      ctx.fillText(t, x, y0 + i * step);
+    });
+  list(notes.left, 10, h / 2, 16, "left");
+  list(notes.right, w - 10, h / 2, 16, "right");
+  list(notes.top, w / 2, 36, 16, "center");
+  list(notes.bottom, w / 2, h - 10, -16, "center");
+
   ctx.restore();
 }
 

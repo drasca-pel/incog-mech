@@ -411,3 +411,7 @@
 .env-num { display: inline-flex; align-items: center; gap: 5px; }
 .env-num .textin { width: 78px; padding: 4px 8px; }
 .env-panel .hint { margin-top: 8px; font-size: 12px; }
+
+.env-actions { display: flex; gap: 8px; margin-bottom: 6px; }
+.env-actions button { flex: 1; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: rgba(255, 255, 255, 0.04); color: inherit; cursor: pointer; font: inherit; font-size: 12px; }
+.env-actions button:hover { background: rgba(255, 255, 255, 0.09); }

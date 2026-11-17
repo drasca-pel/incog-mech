@@ -49,6 +49,11 @@ function planckShape(s) {
   return new Polygon(s.pts.map((p) => new Vec2(p.x, p.y)));
 }
 
+// Collision groups. The room is its own group, so an object set to "not solid" still stops at the
+// ground and walls even though it passes through other objects.
+const THING = 0x0001;
+const ROOM = 0x0002;
+
 const CONNECTORS = new Set(["rope", "rod", "spring"]);
 
 export function createSim(scene, gravity, envIn) {
@@ -64,7 +69,7 @@ export function createSim(scene, gravity, envIn) {
 
   // ----- ground and limits -----
   const edge = (a, b, friction, restitution) =>
-    ground.createFixture({ shape: new Edge(new Vec2(a.x, a.y), new Vec2(b.x, b.y)), friction, restitution });
+    ground.createFixture({ shape: new Edge(new Vec2(a.x, a.y), new Vec2(b.x, b.y)), friction, restitution, filterCategoryBits: ROOM });
   if (env.ground.on) edge({ x: -BIG, y: env.ground.y }, { x: BIG, y: env.ground.y }, env.ground.friction, env.ground.bounce);
   if (env.ceiling.on) edge({ x: -BIG, y: env.ceiling.y }, { x: BIG, y: env.ceiling.y }, 0.3, env.ceiling.bounce);
   if (env.left.on) edge({ x: env.left.x, y: -BIG }, { x: env.left.x, y: BIG }, 0.3, 0.2);
@@ -86,13 +91,25 @@ export function createSim(scene, gravity, envIn) {
       density: ph.kind === "dynamic" ? Math.max(0.0001, ph.mass) / areaOf(ph.shape) : 0,
       friction: ph.friction ?? 0.4,
       restitution: it.bounce ?? 0,
-      filterMaskBits: it.solid === false ? 0 : 0xffff, // not solid: passes through everything
+      filterCategoryBits: THING,
+      filterMaskBits: it.solid === false ? ROOM : 0xffff, // not solid: passes through other objects, but not the room
     });
     if (ph.kind === "dynamic" && it.speed0 > 0) {
       const a = ((it.angle0 || 0) * Math.PI) / 180;
       body.setLinearVelocity(new Vec2(it.speed0 * Math.cos(a), it.speed0 * Math.sin(a)));
     }
     recs.set(it.id, { body, item: it, kind: ph.kind, torque: ph.torque || 0, trail: [], maxY: ph.y, x0: ph.x, y0: ph.y });
+  }
+
+  // Anything that starts outside a closed room would sit on the wrong side of the walls
+  const outside = (x, y) =>
+    (env.left.on && x < env.left.x) || (env.right.on && x > env.right.x) ||
+    (env.ground.on && y < env.ground.y) || (env.ceiling.on && y > env.ceiling.y);
+  for (const rec of recs.values()) {
+    if (rec.kind === "dynamic" && outside(rec.x0, rec.y0)) {
+      const it = rec.item;
+      warnings.push(`${it.label || `${itemType(it.type).title(it)} ${it.id}`} starts outside the room.`);
+    }
   }
 
   // ----- finding what the end of a line is tied to -----

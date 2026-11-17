@@ -8,7 +8,10 @@ import { settle } from "./core/joins.js";
 import { patchEnv } from "./core/env.js";
 import { collectResults, resolvePinned } from "./core/results.js";
 import { createSim } from "./sim/index.js";
-import { newProject, zoomView, DEFAULT_VIEW } from "./core/projects.js";
+import { newProject, zoomView, fitRoom, DEFAULT_VIEW } from "./core/projects.js";
+import {
+  hasDesktop, loadWorkspace, saveWorkspace, saveWorkspaceNow, workspaceToJson, projectFileJson, projectFromFileText,
+} from "./core/storage.js";
 import TitleBar from "./ui/TitleBar.jsx";
 import Ribbon from "./ui/Ribbon.jsx";
 import LeftBar from "./ui/LeftBar.jsx";
@@ -33,6 +36,10 @@ export default function App() {
     const p = newProject(1);
     return { projects: [p], activeId: p.id };
   });
+  const [ready, setReady] = useState(false); // true once the saved workspace has been read
+  const stateRef = useRef(null); // latest projects, readable when the window closes
+  const sizeRef = useRef(null); // size of the drawing area in pixels, for Zoom fit
+  const runRef = useRef(null); // latest runAction, readable from the keyboard handler
   const [selectedId, setSelectedId] = useState(null);
   const [simStatus, setSimStatus] = useState("idle"); // idle | playing | paused
   const [simScene, setSimScene] = useState(null); // the drawing as the simulation has moved it
@@ -47,6 +54,7 @@ export default function App() {
   const [envOpen, setEnvOpen] = useState(false);
   const [message, setMessage] = useState("Ready. Pick a tool from the ribbon, or type a command.");
 
+  stateRef.current = state;
   const active = state.projects.find((p) => p.id === state.activeId) || null;
   const tool = TOOLS.find((t) => t.id === activeTool) || TOOLS[0];
   const simActive = simStatus !== "idle" && simScene;
@@ -215,6 +223,60 @@ export default function App() {
     return () => cancelAnimationFrame(raf);
   }, [simStatus]);
 
+  // ----- saving and opening -----
+  // Autosave keeps every tab safe on its own. Save and Open are for a project file you choose.
+  const fileName = (p) => p.name.replace(/[\\/:*?"<>|]+/g, "_");
+
+  const saveProject = async (askWhere) => {
+    if (!active) return;
+    if (!hasDesktop()) {
+      setMessage("Saving to a file works in the desktop app. In this browser your work is kept automatically.");
+      return;
+    }
+    const id = active.id;
+    const json = projectFileJson(active);
+    try {
+      const res =
+        active.filePath && !askWhere
+          ? await window.api.saveProject(active.filePath, json)
+          : await window.api.saveProjectAs(fileName(active), json);
+      if (res.canceled) return;
+      if (!res.ok) throw new Error(res.error);
+      setState((s) => ({ ...s, projects: s.projects.map((p) => (p.id === id ? { ...p, filePath: res.path } : p)) }));
+      setMessage(`Saved to ${res.path}`);
+    } catch (err) {
+      setMessage(`Could not save: ${err.message}`);
+    }
+  };
+
+  const openProject = async () => {
+    if (!hasDesktop()) {
+      setMessage("Opening files works in the desktop app. In this browser your work is kept automatically.");
+      return;
+    }
+    try {
+      const res = await window.api.openProject();
+      if (res.canceled) return;
+      if (!res.ok) throw new Error(res.error);
+      const already = stateRef.current.projects.find((p) => p.filePath === res.path);
+      if (already) {
+        resetSim();
+        setState((s) => ({ ...s, activeId: already.id }));
+        setSelectedId(null);
+        setMessage(`${already.name} is already open.`);
+        return;
+      }
+      counter.current += 1;
+      const p = { ...projectFromFileText(res.content, counter.current), filePath: res.path };
+      resetSim();
+      setState((s) => ({ projects: [...s.projects, p], activeId: p.id }));
+      setSelectedId(null);
+      setMessage(`Opened ${res.path}`);
+    } catch (err) {
+      setMessage(`Could not open: ${err.message}`);
+    }
+  };
+
   // ----- tools and actions -----
   const runAction = (id) => {
     if (id === "grid") setGrid((g) => !g);
@@ -222,7 +284,7 @@ export default function App() {
     else if (id === "snap") setSnap((v) => !v);
     else if (id === "zoomIn") updateActive((p) => ({ ...p, view: zoomView(p.view, 1.25) }));
     else if (id === "zoomOut") updateActive((p) => ({ ...p, view: zoomView(p.view, 0.8) }));
-    else if (id === "zoomFit") updateActive((p) => ({ ...p, view: { ...DEFAULT_VIEW } }));
+    else if (id === "zoomFit") updateActive((p) => ({ ...p, view: fitRoom(p.env, sizeRef.current) }));
     else if (id === "zoomReset") updateActive((p) => ({ ...p, view: { ...p.view, scale: DEFAULT_VIEW.scale } }));
     else if (id === "results") {
       setRightTab("results");
@@ -233,7 +295,11 @@ export default function App() {
     else if (id === "undo") undo();
     else if (id === "redo") redo();
     else if (id === "delete") deleteSelected();
+    else if (id === "save") saveProject(false);
+    else if (id === "saveAs") saveProject(true);
+    else if (id === "open") openProject();
   };
+  runRef.current = runAction;
 
   const activate = (t) => {
     if (!t.ready) {
@@ -286,6 +352,16 @@ export default function App() {
         setSnap((v) => !v);
         return;
       }
+      if (mod && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        runRef.current(e.shiftKey ? "saveAs" : "save");
+        return;
+      }
+      if (mod && e.key.toLowerCase() === "o") {
+        e.preventDefault();
+        runRef.current("open");
+        return;
+      }
       if (["INPUT", "TEXTAREA", "SELECT"].includes(e.target.tagName)) return;
       if (mod && e.key.toLowerCase() === "z") {
         e.preventDefault();
@@ -330,6 +406,44 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // ----- autosave: read the saved workspace at start, then keep it up to date -----
+  useEffect(() => {
+    let cancelled = false;
+    loadWorkspace().then((saved) => {
+      if (cancelled) return;
+      if (saved) {
+        counter.current = saved.projects.reduce(
+          (m, p) => Math.max(m, Number((/^Project (\d+)$/.exec(p.name) || [])[1]) || 0),
+          saved.projects.length
+        );
+        setState(saved);
+      }
+      setReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!ready) return undefined;
+    const t = setTimeout(() => saveWorkspace(workspaceToJson(state.projects, state.activeId)), 500);
+    return () => clearTimeout(t);
+  }, [ready, state]);
+
+  useEffect(() => {
+    const flush = () => {
+      if (stateRef.current && ready) saveWorkspaceNow(workspaceToJson(stateRef.current.projects, stateRef.current.activeId));
+    };
+    window.addEventListener("beforeunload", flush);
+    return () => window.removeEventListener("beforeunload", flush);
+  }, [ready]);
+
+  // Messages from the updater ("Update found", "Update ready")
+  useEffect(() => (window.api && window.api.onUpdate ? window.api.onUpdate(setMessage) : undefined), []);
+
+  if (!ready) return <div className="app" />;
+
   return (
     <div className="app">
       <TitleBar
@@ -362,6 +476,9 @@ export default function App() {
             scene={shownScene}
             selectedId={selectedItem ? selectedItem.id : null}
             onView={(view) => updateActive((p) => ({ ...p, view }))}
+            onSize={(s) => {
+              sizeRef.current = s;
+            }}
             onCursor={setCursor}
             onSelect={setSelectedId}
             onAddItem={addItemToScene}

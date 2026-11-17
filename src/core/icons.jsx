@@ -1,7 +1,5 @@
 // Line icons on a 24x24 grid, drawn in the current text colour.
 
-import Results from "../ui/Results";
-
 // They are bundled in the app, so they work fully offline.
 const ICONS = {
   select: <path d="M6 3l11 8.5-5 1.2 3 6-2.3 1.1-3-6L6 18z" />,
@@ -150,6 +148,9 @@ const ICONS = {
       <path d="M16 16l5 5M8.5 11h5" />
     </>
   ),
+  save: <path d="M5 4h11l3 3v13H5zM8 4v5h7V4M8 20v-6h8v6" />,
+  saveAs: <path d="M5 4h10l3 3v5M5 4v16h7M8 4v5h6V4M18 15v6M15 18h6" />,
+  open: <path d="M3 7a1 1 0 0 1 1-1h5l2 2h8a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z" />,
   measure: <path d="M4 17L17 4l3 3L7 20zM8 13l2 2M11 10l2 2M14 7l2 2" />,
 };
 

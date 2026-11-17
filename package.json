@@ -1,40 +1,70 @@
 {
- "name": "incog-mechanics",
- "productName": "INCOG Mechanics",
- "private": true,
- "version": "0.0.0",
- "main": "electron/main.cjs",
- "type": "module",
- "scripts": {
-  "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && cross-env NODE_ENV=development electron .\"",
-  "dev": "vite",
-  "build": "vite build",
-  "lint": "eslint .",
-  "preview": "vite preview"
- },
- "dependencies": {
-  "@lab/math-core": "*",
-  "planck": "^1.5.1",
-  "react": "^19.3.1",
-  "react-dom": "^19.3.1"
- },
- "devDependencies": {
-  "@eslint/js": "^10.0.1",
-  "@types/react": "^19.3.0",
-  "@types/react-dom": "^19.3.0",
-  "@vitejs/plugin-react": "^6.1.2",
-  "concurrently": "^10.0.7",
-  "cross-env": "^10.1.0",
-  "electron": "^45.3.2",
-  "eslint": "^10.14.0",
-  "eslint-plugin-react-hooks": "^7.1.1",
-  "eslint-plugin-react-refresh": "^0.5.7",
-  "globals": "^17.13.0",
-  "vite": "^8.3.6",
-  "wait-on": "^9.5.1"
- },
- "description": "Mechanics Lab: offline 2D physics simulator",
- "keywords": [],
- "author": "",
- "license": "ISC"
+  "name": "incog-mechanics",
+  "productName": "INCOG Mechanics",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Mechanics Lab: offline 2D physics simulator",
+  "author": "INCOG",
+  "license": "ISC",
+  "keywords": [],
+  "main": "electron/main.cjs",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && cross-env NODE_ENV=development electron .\"",
+    "build": "vite build",
+    "start": "vite build && electron .",
+    "dist": "vite build && electron-builder --win --publish never",
+    "release": "vite build && electron-builder --win --publish always",
+    "lint": "eslint .",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "electron-updater": "^6.6.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "concurrently": "^10.0.7",
+    "cross-env": "^10.1.0",
+    "electron": "^45.3.2",
+    "electron-builder": "^26.0.12",
+    "eslint": "^10.14.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.7",
+    "globals": "^17.13.0",
+    "planck": "^1.5.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "vite": "^8.3.6",
+    "wait-on": "^9.5.1"
+  },
+  "build": {
+    "appId": "com.incog.mechanics",
+    "productName": "INCOG Mechanics",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false
+    },
+    "publish": [
+  {
+    "provider": "github",
+    "owner": "drasca-pel",
+    "repo": "incog-mech"
+  }
+]
+  }
 }

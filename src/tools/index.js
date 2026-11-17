@@ -24,6 +24,9 @@ const tool = (id, name, tab, group, extra = {}) => ({
 
 export const TOOLS = [
   // Home
+  tool("save", "Save", "Home", "File", { ready: true, shortcut: "Ctrl+S" }),
+  tool("saveAs", "Save as", "Home", "File", { ready: true, shortcut: "Ctrl+Shift+S" }),
+  tool("open", "Open", "Home", "File", { ready: true, shortcut: "Ctrl+O" }),
   tool("select", "Select", "Home", "Pointer", { kind: "tool", ready: true, shortcut: "V", prompt: "Select: click an object to see its properties." }),
   tool("pan", "Pan", "Home", "Pointer", { kind: "tool", ready: true, shortcut: "H", prompt: "Pan: drag to move the view. The mouse wheel zooms." }),
   tool("undo", "Undo", "Home", "Edit", { ready: true, shortcut: "Ctrl+Z" }),
