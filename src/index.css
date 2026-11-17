@@ -1,0 +1,30 @@
+:root {
+  --ink: #0c111d;
+  --chrome: #121a2c;
+  --chrome-2: #18223a;
+  --line: #25314f;
+  --line-soft: #1c2740;
+  --text: #e6ebf5;
+  --muted: #8793ae;
+  --faint: #5d6a88;
+  --accent: #f5b83d;
+  --accent-ink: #1a1405;
+  --sans: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --mono: "Cascadia Mono", Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body {
+  background: var(--ink);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 14px;
+  overflow: hidden;
+}
+button { font: inherit; color: inherit; cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--line); border-radius: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
