@@ -415,3 +415,5 @@
 .env-actions { display: flex; gap: 8px; margin-bottom: 6px; }
 .env-actions button { flex: 1; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: rgba(255, 255, 255, 0.04); color: inherit; cursor: pointer; font: inherit; font-size: 12px; }
 .env-actions button:hover { background: rgba(255, 255, 255, 0.09); }
+
+.env-title { margin: 12px 0 4px; font-size: 10.5px; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); }

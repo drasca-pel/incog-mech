@@ -416,10 +416,12 @@ function chip(ctx, text, x, y) {
 // If a side is out of view (zoomed in or panned away) a note at the edge says where it is.
 function drawEnv(ctx, w, h, toScreen, env) {
   const FAR = 1e5;
-  const L = env.left.on ? toScreen({ x: env.left.x, y: 0 }).x : -FAR;
-  const R = env.right.on ? toScreen({ x: env.right.x, y: 0 }).x : FAR;
-  const T = env.ceiling.on ? toScreen({ x: 0, y: env.ceiling.y }).y : -FAR;
-  const B = env.ground.on ? toScreen({ x: 0, y: env.ground.y }).y : FAR;
+  const pinned = Boolean(env.room && env.room.fit); // the room stays at the screen edges and does not zoom
+  const INS = 18;
+  const L = env.left.on ? (pinned ? INS : toScreen({ x: env.left.x, y: 0 }).x) : -FAR;
+  const R = env.right.on ? (pinned ? w - INS : toScreen({ x: env.right.x, y: 0 }).x) : FAR;
+  const T = env.ceiling.on ? (pinned ? INS : toScreen({ x: 0, y: env.ceiling.y }).y) : -FAR;
+  const B = env.ground.on ? (pinned ? h - INS : toScreen({ x: 0, y: env.ground.y }).y) : FAR;
   const num = (n) => String(Math.round(n * 100) / 100);
 
   ctx.save();
@@ -488,10 +490,12 @@ function drawEnv(ctx, w, h, toScreen, env) {
     if (py <= -30) notes.top.push(`\u25B2 ${name} at y = ${num(y)} m`);
     else if (py >= h + 30) notes.bottom.push(`\u25BC ${name} at y = ${num(y)} m`);
   };
-  if (env.left.on) wallNote(env.left.x, "left wall");
-  if (env.right.on) wallNote(env.right.x, "right wall");
-  if (env.ground.on) levelNote(env.ground.y, "ground");
-  if (env.ceiling.on) levelNote(env.ceiling.y, "ceiling");
+  if (!pinned) {
+    if (env.left.on) wallNote(env.left.x, "left wall");
+    if (env.right.on) wallNote(env.right.x, "right wall");
+    if (env.ground.on) levelNote(env.ground.y, "ground");
+    if (env.ceiling.on) levelNote(env.ceiling.y, "ceiling");
+  }
   ctx.fillStyle = "#8f9bb8";
   ctx.font = `600 11px ${MONO}`;
   const list = (items, x, y0, step, align) =>

@@ -27,7 +27,7 @@ export function newProject(number) {
 // A view that shows the whole room (when it is closed on all four sides). size = { w, h } of the canvas in pixels.
 export function fitRoom(env, size) {
   const r = roomBounds(env);
-  if (!r || !size) return { ...DEFAULT_VIEW };
+  if (!r || !size || (env.room && env.room.fit)) return { ...DEFAULT_VIEW };
   const pad = 40;
   const fit = Math.min((size.w - 2 * pad) / (r.right - r.left), (size.h - 2 * pad) / (r.top - r.bottom));
   const scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, fit));

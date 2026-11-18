@@ -68,8 +68,9 @@ export function createSim(scene, gravity, envIn) {
   let stepCount = 0;
 
   // ----- ground and limits -----
+  const frictionless = env.friction && env.friction.on === false; // every surface is smooth
   const edge = (a, b, friction, restitution) =>
-    ground.createFixture({ shape: new Edge(new Vec2(a.x, a.y), new Vec2(b.x, b.y)), friction, restitution, filterCategoryBits: ROOM });
+    ground.createFixture({ shape: new Edge(new Vec2(a.x, a.y), new Vec2(b.x, b.y)), friction: frictionless ? 0 : friction, restitution, filterCategoryBits: ROOM });
   if (env.ground.on) edge({ x: -BIG, y: env.ground.y }, { x: BIG, y: env.ground.y }, env.ground.friction, env.ground.bounce);
   if (env.ceiling.on) edge({ x: -BIG, y: env.ceiling.y }, { x: BIG, y: env.ceiling.y }, 0.3, env.ceiling.bounce);
   if (env.left.on) edge({ x: env.left.x, y: -BIG }, { x: env.left.x, y: BIG }, 0.3, 0.2);
@@ -89,7 +90,7 @@ export function createSim(scene, gravity, envIn) {
     body.createFixture({
       shape: planckShape(ph.shape),
       density: ph.kind === "dynamic" ? Math.max(0.0001, ph.mass) / areaOf(ph.shape) : 0,
-      friction: ph.friction ?? 0.4,
+      friction: frictionless ? 0 : ph.friction ?? 0.4,
       restitution: it.bounce ?? 0,
       filterCategoryBits: THING,
       filterMaskBits: it.solid === false ? ROOM : 0xffff, // not solid: passes through other objects, but not the room

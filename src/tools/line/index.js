@@ -4,9 +4,9 @@
 import { registerItemType } from "../../core/itemTypes.js";
 import { dist, angleBetween, pointAt, distToSegment } from "../../core/geometry.js";
 
-const TYPES = ["line", "rope", "rod", "spring", "vector", "force"];
+const TYPES = ["line", "rope", "rod", "spring", "vector", "force", "hook"];
 const PATTERNS = ["solid", "dashed", "dotted"];
-const COLORS = { line: "#cdd6e6", rope: "#d9b779", rod: "#9fb0d0", spring: "#7bd88f", vector: "#4cc9f0", force: "#ff8fab" };
+const COLORS = { line: "#cdd6e6", rope: "#d9b779", rod: "#9fb0d0", hook: "#e8c97a", spring: "#7bd88f", vector: "#4cc9f0", force: "#ff8fab" };
 const round2 = (n) => Math.round(n * 100) / 100;
 const cap = (s) => s[0].toUpperCase() + s.slice(1);
 
@@ -35,7 +35,7 @@ registerItemType("line", {
 
     ctx.strokeStyle = color;
     ctx.fillStyle = color;
-    ctx.lineWidth = item.style === "rod" ? 6 : 2.5;
+    ctx.lineWidth = item.style === "rod" ? 6 : item.style === "hook" ? 4 : 2.5;
     if (item.pattern === "dashed") ctx.setLineDash([10, 7]);
     else if (item.pattern === "dotted") ctx.setLineDash([0.1, 7]);
     if (item.style === "spring") {
@@ -61,6 +61,12 @@ registerItemType("line", {
     }
     ctx.setLineDash([]);
 
+    if (item.style === "hook") {
+      // a massless arm: a dot at the object's centre and a ring where a rope or spring can be tied
+      ctx.beginPath(); ctx.arc(a.x, a.y, 3.5, 0, Math.PI * 2); ctx.fill();
+      ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.arc(b.x, b.y, 6, 0, Math.PI * 2); ctx.stroke();
+    }
     if (item.style === "rope") {
       for (const p of [a, b]) {
         ctx.beginPath();
@@ -177,6 +183,7 @@ export const lineTools = [
   lineTool("dotted", "Dotted", "line", "dotted"),
   lineTool("rope", "Rope", "rope", "solid"),
   lineTool("rod", "Rod", "rod", "solid"),
+  { ...lineTool("hook", "Hook", "hook", "solid"), prompt: "Hook: click the object, then click where the rope or spring should attach. The hook has no mass and no force of its own: it only moves the attach point away from the object." },
   lineTool("spring", "Spring", "spring", "solid"),
   lineTool("vector", "Vector", "vector", "solid"),
   { ...lineTool("force", "Force", "force", "solid"), group: "Forces" },

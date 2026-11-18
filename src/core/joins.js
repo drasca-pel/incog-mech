@@ -18,6 +18,12 @@ export const localOfWorld = (it, p) => rotatePoint({ x: p.x - it.x, y: p.y - it.
 
 // What is at point p? Returns an attach record or null.
 export function findAttach(scene, p, skipId) {
+  // the tip of a hook: tie to the object the hook belongs to, at the offset of the tip
+  for (const it of scene.items) {
+    if (it.type === "line" && it.style === "hook" && it.hostId && it.tip && it.id !== skipId && dist(it.b, p) <= TOL) {
+      return { id: it.hostId, lx: it.tip.x, ly: it.tip.y };
+    }
+  }
   for (let i = scene.items.length - 1; i >= 0; i--) {
     const it = scene.items[i];
     if (it.type === "line" || it.id === skipId) continue;
@@ -37,6 +43,7 @@ export function applyJoins(scene) {
   const items = scene.items.map((it) => {
     if (it.type !== "line" || (!it.attachA && !it.attachB)) return it;
     let out = it;
+    if (it.style === "hook" && it.hostId && it.tip && byId.get(it.hostId)) out = { ...out, b: worldOfLocal(byId.get(it.hostId), it.tip) };
     for (const [key, end] of [["attachA", "a"], ["attachB", "b"]]) {
       const rec = out[key];
       if (!rec) continue;
@@ -56,6 +63,35 @@ export function applyJoins(scene) {
 // Work out again what each end of a line is tied to
 export function rejoin(scene, line) {
   const out = { ...line };
+  if (line.style === "hook") {
+    // a hook starts at the centre of an object (so the object's mass stays centred) and ends at a free tip
+    let att = findAttach(scene, line.a, line.id);
+    if (!att) {
+      // clicked anywhere on an object: that object carries the hook
+      for (let i = scene.items.length - 1; i >= 0; i--) {
+        const it = scene.items[i];
+        const def = it.type === "line" ? null : itemType(it.type);
+        if (isBody(it, def) && def.hitTest && def.hitTest(it, line.a, 0.03)) {
+          att = { id: it.id, lx: 0, ly: 0 };
+          break;
+        }
+      }
+    }
+    const host = att && scene.items.find((i) => i.id === att.id);
+    // the hook always starts at the object's centre, so its mass stays centred and the object is never pulled out of shape
+    if (att && host && isBody(host, itemType(host.type))) att = { id: host.id, lx: 0, ly: 0 };
+    delete out.attachB;
+    if (att && host) {
+      out.attachA = att;
+      out.hostId = att.id;
+      out.tip = localOfWorld(host, line.b);
+    } else {
+      delete out.attachA;
+      delete out.hostId;
+      delete out.tip;
+    }
+    return out;
+  }
   for (const [key, end] of [["attachA", "a"], ["attachB", "b"]]) {
     const att = findAttach(scene, line[end], line.id);
     if (att) out[key] = att;

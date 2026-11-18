@@ -9,6 +9,7 @@ import { patchEnv } from "./core/env.js";
 import { collectResults, resolvePinned } from "./core/results.js";
 import { createSim } from "./sim/index.js";
 import { newProject, zoomView, fitRoom, DEFAULT_VIEW } from "./core/projects.js";
+import { liveEnv } from "./core/env.js";
 import {
   hasDesktop, loadWorkspace, saveWorkspace, saveWorkspaceNow, workspaceToJson, projectFileJson, projectFromFileText,
 } from "./core/storage.js";
@@ -21,6 +22,10 @@ import CommandBar from "./ui/CommandBar.jsx";
 import StatusBar from "./ui/StatusBar.jsx";
 import StartPage from "./ui/StartPage.jsx";
 import EnvPanel from "./ui/EnvPanel.jsx";
+import Workspace from "./modes/Workspace.jsx";
+import { STATICS_TOOLS, STATICS_DEFAULT } from "./modes/statics/StaticsTools.jsx";
+import { MOTION_TOOLS, MOTION_DEFAULT } from "./modes/motion/MotionTools.jsx";
+import "./modes/modes.css";
 
 // The shell: it arranges the screen and passes events around.
 // It knows nothing about specific tools. They come from tools/index.js.
@@ -37,8 +42,13 @@ export default function App() {
     return { projects: [p], activeId: p.id };
   });
   const [ready, setReady] = useState(false); // true once the saved workspace has been read
+  const [mode, setMode] = useState("sandbox"); // sandbox, statics or motion
+  const [modeData, setModeData] = useState({}); // what was typed into the Statics and Motion tools
+  const modeRef = useRef("sandbox");
+  const extraRef = useRef({});
   const stateRef = useRef(null); // latest projects, readable when the window closes
   const sizeRef = useRef(null); // size of the drawing area in pixels, for Zoom fit
+  const simEnvRef = useRef(null); // the room as it was when Play was pressed
   const runRef = useRef(null); // latest runAction, readable from the keyboard handler
   const [selectedId, setSelectedId] = useState(null);
   const [simStatus, setSimStatus] = useState("idle"); // idle | playing | paused
@@ -55,6 +65,8 @@ export default function App() {
   const [message, setMessage] = useState("Ready. Pick a tool from the ribbon, or type a command.");
 
   stateRef.current = state;
+  modeRef.current = mode;
+  extraRef.current = { mode, modeData };
   const active = state.projects.find((p) => p.id === state.activeId) || null;
   const tool = TOOLS.find((t) => t.id === activeTool) || TOOLS[0];
   const simActive = simStatus !== "idle" && simScene;
@@ -193,7 +205,10 @@ export default function App() {
 
   const playSim = () => {
     if (statusRef.current === "idle") {
-      const sim = createSim(sceneRef.current, gravityRef.current, envRef.current);
+      const cur = stateRef.current.projects.find((p) => p.id === stateRef.current.activeId);
+      const roomNow = liveEnv(envRef.current, cur ? cur.view : DEFAULT_VIEW, sizeRef.current);
+      simEnvRef.current = roomNow;
+      const sim = createSim(sceneRef.current, gravityRef.current, roomNow);
       simRef.current = sim;
       setSimScene(sim.snapshot());
       setSimTime(0);
@@ -330,6 +345,7 @@ export default function App() {
   // ----- keyboard -----
   useEffect(() => {
     const onKey = (e) => {
+      if (modeRef.current !== "sandbox") return; // Statics and Motion have their own screens
       const mod = e.ctrlKey || e.metaKey;
       // Ctrl and + / - / 0 zoom the drawing, not the whole window
       if (mod && ["+", "=", "-", "_", "0"].includes(e.key)) {
@@ -417,6 +433,10 @@ export default function App() {
           saved.projects.length
         );
         setState(saved);
+        if (saved.extra) {
+          if (["sandbox", "statics", "motion"].includes(saved.extra.mode)) setMode(saved.extra.mode);
+          if (saved.extra.modeData && typeof saved.extra.modeData === "object") setModeData(saved.extra.modeData);
+        }
       }
       setReady(true);
     });
@@ -427,13 +447,13 @@ export default function App() {
 
   useEffect(() => {
     if (!ready) return undefined;
-    const t = setTimeout(() => saveWorkspace(workspaceToJson(state.projects, state.activeId)), 500);
+    const t = setTimeout(() => saveWorkspace(workspaceToJson(state.projects, state.activeId, { mode, modeData })), 500);
     return () => clearTimeout(t);
-  }, [ready, state]);
+  }, [ready, state, mode, modeData]);
 
   useEffect(() => {
     const flush = () => {
-      if (stateRef.current && ready) saveWorkspaceNow(workspaceToJson(stateRef.current.projects, stateRef.current.activeId));
+      if (stateRef.current && ready) saveWorkspaceNow(workspaceToJson(stateRef.current.projects, stateRef.current.activeId, extraRef.current));
     };
     window.addEventListener("beforeunload", flush);
     return () => window.removeEventListener("beforeunload", flush);
@@ -443,6 +463,28 @@ export default function App() {
   useEffect(() => (window.api && window.api.onUpdate ? window.api.onUpdate(setMessage) : undefined), []);
 
   if (!ready) return <div className="app" />;
+
+  const switchMode = (m) => {
+    resetSim();
+    setMode(m);
+  };
+  if (mode !== "sandbox") {
+    const isStatics = mode === "statics";
+    return (
+      <div className="app app-mode">
+        <TitleBar projects={state.projects} activeId={state.activeId} onSelect={() => {}} onAdd={() => {}} onClose={() => {}} onRename={() => {}} mode={mode} onMode={switchMode} />
+        <Workspace
+          key={mode}
+          title={isStatics ? "Statics" : "Motion"}
+          blurb={isStatics ? "Forces, moments, equilibrium, friction, centroid and inertia" : "Projectiles, graphs, energy and momentum"}
+          tools={isStatics ? STATICS_TOOLS : MOTION_TOOLS}
+          defaultTool={isStatics ? STATICS_DEFAULT : MOTION_DEFAULT}
+          data={modeData[mode] || {}}
+          onData={(d) => setModeData((m) => ({ ...m, [mode]: d }))}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="app">
@@ -457,12 +499,14 @@ export default function App() {
         onAdd={addProject}
         onClose={closeProject}
         onRename={renameProject}
+        mode={mode}
+        onMode={switchMode}
       />
 
-      <Ribbon tools={TOOLS} activeTool={activeTool} toggles={{ grid, axes, snap }} onActivate={activate} />
+      <Ribbon tools={TOOLS.filter((t) => t.ready)} activeTool={activeTool} toggles={{ grid, axes, snap }} onActivate={activate} />
 
       <div className="workspace" style={{ "--props-w": propsOpen ? "280px" : "34px" }}>
-        <LeftBar tools={TOOLS} activeTool={activeTool} onActivate={activate} />
+        <LeftBar tools={TOOLS.filter((t) => t.ready)} activeTool={activeTool} onActivate={activate} />
         {active ? (
           <CanvasView
             key={active.id}
@@ -471,7 +515,7 @@ export default function App() {
             axes={axes}
             snap={snap}
             tool={tool}
-            env={active.env}
+            env={simStatus !== "idle" && simEnvRef.current ? simEnvRef.current : active.env}
             pins={pins}
             scene={shownScene}
             selectedId={selectedItem ? selectedItem.id : null}

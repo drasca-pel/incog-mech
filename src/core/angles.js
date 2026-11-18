@@ -16,7 +16,7 @@ const make = (c, f, s, sweep) => ({
 export function computeAngles(scene) {
   const ends = [];
   for (const it of scene.items) {
-    if (it.type !== "line") continue;
+    if (it.type !== "line" || it.style === "hook") continue; // a hook is only an attach point
     ends.push({ id: it.id, end: "a", p: it.a, far: it.b });
     ends.push({ id: it.id, end: "b", p: it.b, far: it.a });
   }

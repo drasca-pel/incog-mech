@@ -1,10 +1,9 @@
-# Builds the Windows installer and uploads it to a GitHub Release whenever you push a tag like v1.0.1
+# Builds the Windows installer and uploads it to a GitHub Release.
+# It runs ONLY when you press the button: GitHub > Actions > Release > Run workflow.
 name: Release
 
 on:
-  push:
-    tags:
-      - "v*"
+  workflow_dispatch:
 
 jobs:
   release:

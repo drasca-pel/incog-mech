@@ -13,7 +13,7 @@ export default function Ribbon({ tools, activeTool, toggles, onActivate }) {
   return (
     <section className="ribbon">
       <div className="ribbon-tabs" role="tablist">
-        {TABS.map((name) => (
+        {TABS.filter((name) => tools.some((t) => t.tab === name)).map((name) => (
           <button
             key={name}
             role="tab"

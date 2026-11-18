@@ -106,7 +106,7 @@ function createWindow() {
       preload: path.join(__dirname, "preload.cjs"),
     },
   });
-  win.webContents.setVisualZoomLevelLimits(1, 1); // stops pinch-zoom from scaling the whole window
+    win.webContents.setVisualZoomLevelLimits(1, 1).catch(() => {}); // stops pinch-zoom from scaling the whole window
   win.webContents.setWindowOpenHandler(() => ({ action: "deny" })); // the app never opens extra windows
 
   if (process.env.NODE_ENV === "development") {

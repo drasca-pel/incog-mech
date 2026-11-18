@@ -66,11 +66,12 @@ export function projectFromFileText(text, number) {
 }
 
 // ----- the whole workspace (all tabs) -----
-export function workspaceToJson(projects, activeId) {
+export function workspaceToJson(projects, activeId, extra = {}) {
   return JSON.stringify({
     app: "incog-mech",
     format: FORMAT,
     activeId,
+    extra,
     projects: projects.map((p) => ({ ...projectToData(p), id: p.id, filePath: p.filePath || null })),
   });
 }
@@ -92,7 +93,7 @@ export function workspaceFromJson(text) {
       }
     }
     const activeId = projects.some((p) => p.id === raw.activeId) ? raw.activeId : projects[0]?.id ?? null;
-    return { projects, activeId };
+    return { projects, activeId, extra: raw.extra && typeof raw.extra === "object" ? raw.extra : {} };
   } catch {
     return null;
   }

@@ -2,7 +2,7 @@ import { useState } from "react";
 
 // Brand and project tabs, like drawing tabs in AutoCAD.
 // Double-click a tab to rename it.
-export default function TitleBar({ projects, activeId, onSelect, onAdd, onClose, onRename }) {
+export default function TitleBar({ projects, activeId, onSelect, onAdd, onClose, onRename, mode = "sandbox", onMode }) {
   const [editing, setEditing] = useState(null);
 
   return (
@@ -10,6 +10,14 @@ export default function TitleBar({ projects, activeId, onSelect, onAdd, onClose,
       <div className="brand">
         INCOG<span>Mechanics</span>
       </div>
+      {onMode && (
+        <div className="modes" role="group" aria-label="Workspace">
+          {[["sandbox", "Sandbox"], ["statics", "Statics"], ["motion", "Motion"]].map(([id, name]) => (
+            <button key={id} aria-pressed={mode === id} onClick={() => onMode(id)}>{name}</button>
+          ))}
+        </div>
+      )}
+      {mode === "sandbox" && (
       <div className="ptabs" role="tablist" aria-label="Projects">
         {projects.map((p) => (
           <div
@@ -56,6 +64,7 @@ export default function TitleBar({ projects, activeId, onSelect, onAdd, onClose,
           +
         </button>
       </div>
+      )}
     </header>
   );
 }
