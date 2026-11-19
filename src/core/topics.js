@@ -6,7 +6,7 @@ import { newEnv } from "./env.js";
 const open = (over) => ({
   ...newEnv(),
   room: { fit: false },
-  ground: { on: true, y: 0, friction: 0.5, bounce: 0 },
+  ground: { on: true, y: -5, friction: 0.5, bounce: 0 },
   ceiling: { on: false, y: 30, bounce: 0 },
   left: { on: false, x: -30 },
   right: { on: false, x: 30 },
@@ -18,7 +18,7 @@ const open = (over) => ({
 // origin: where (0,0) sits on screen as a fraction of the canvas width and height
 const view = (scale, fx = 0.5, fy = 0.5) => (size) => {
   const s = size || { w: 1000, h: 600 };
-  return { x: (fx - 0.5) * s.w, y: (fy - 0.5) * s.h, scale };
+  return { x: 0,y: 0, scale };
 };
 
 export const TOPICS = [
