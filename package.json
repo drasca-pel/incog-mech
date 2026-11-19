@@ -2,7 +2,7 @@
   "name": "incog-mechanics",
   "productName": "INCOG Mechanics",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Mechanics Lab: offline 2D physics simulator",
   "author": "INCOG",
   "license": "ISC",
