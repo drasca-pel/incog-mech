@@ -18,37 +18,58 @@ export const hasDesktop = () => typeof window !== "undefined" && Boolean(window.
 
 // ----- one project <-> plain data -----
 
+// One workspace (the drawing, room, view and gravity of one topic)
+const spaceToData = (p) => ({ view: p.view, gravity: p.gravity, env: p.env, viewed: p.viewed, scene: p.scene });
+
 // What is written to disk. Undo history and the running simulation are not saved.
+// One project holds the workspace of every topic you used, so one file keeps all of it.
 export const projectToData = (p) => ({
   name: p.name,
   topic: p.topic,
-  view: p.view,
-  gravity: p.gravity,
-  env: p.env,
-  viewed: p.viewed,
-  scene: p.scene,
+  ...spaceToData(p),
+  spaces: Object.fromEntries(Object.entries(p.spaces || {}).map(([id, sp]) => [id, spaceToData(sp)])),
 });
 
-// Turn data read from disk back into a full project. Anything missing gets its default,
-// so files written by an older version of the app still open.
-export function projectFromData(d, number = 1) {
+function spaceFromData(d) {
   if (!d || typeof d !== "object" || !d.scene || !Array.isArray(d.scene.items)) {
     throw new Error("this file is not an INCOG Mechanics project.");
   }
-  const base = newProject(number);
   const env = newEnv();
   for (const part of Object.keys(env)) env[part] = { ...env[part], ...(d.env && d.env[part]) };
   const items = d.scene.items.filter((i) => i && itemType(i.type)); // skip anything this version does not know
   const maxId = items.reduce((m, i) => Math.max(m, Number(i.id) || 0), 0);
   return {
-    ...base,
-    topic: typeof d.topic === "string" ? d.topic : "sandbox",
-    name: typeof d.name === "string" && d.name.trim() ? d.name : base.name,
     view: { ...DEFAULT_VIEW, ...d.view },
     gravity: typeof d.gravity === "number" ? d.gravity : 9.81,
     env,
     viewed: Array.isArray(d.viewed) ? d.viewed : [],
     scene: { items, nextId: Math.max(Number(d.scene.nextId) || 1, maxId + 1) },
+    past: [],
+    future: [],
+  };
+}
+
+// Turn data read from disk back into a full project. Anything missing gets its default,
+// so files written by an older version of the app still open.
+export function projectFromData(d, number = 1) {
+  const base = newProject(number);
+  const main = spaceFromData(d);
+  const spaces = {};
+  if (d.spaces && typeof d.spaces === "object") {
+    for (const [id, sp] of Object.entries(d.spaces)) {
+      try {
+        spaces[id] = spaceFromData(sp);
+      } catch {
+        // a damaged workspace is skipped, the rest still opens
+      }
+    }
+  }
+  return {
+    ...base,
+    ...main,
+    spaces,
+    topic: typeof d.topic === "string" ? d.topic : "sandbox",
+    name: typeof d.name === "string" && d.name.trim() ? d.name : base.name,
     filePath: typeof d.filePath === "string" ? d.filePath : null,
   };
 }

@@ -9,6 +9,13 @@ contextBridge.exposeInMainWorld("api", {
   saveProject: (file, json) => ipcRenderer.invoke("project:save", file, json),
   saveProjectAs: (name, json) => ipcRenderer.invoke("project:saveAs", name, json),
   openProject: () => ipcRenderer.invoke("project:open"),
+  // A project file double-clicked in Windows
+  pendingFile: () => ipcRenderer.invoke("file:pending"),
+  onOpenFile: (callback) => {
+    const handler = (_event, result) => callback(result);
+    ipcRenderer.on("file:open", handler);
+    return () => ipcRenderer.removeListener("file:open", handler);
+  },
   // Messages about updates ("Update found", "Update ready"). Returns a function that stops listening.
   onUpdate: (callback) => {
     const handler = (_event, message) => callback(message);

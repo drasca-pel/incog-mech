@@ -90,6 +90,22 @@ ipcMain.handle("project:open", async (event) => {
   }
 });
 
+// A .incogmech file double-clicked in Windows (or sent to the app while it is already open)
+let pendingFile = null;
+const fileFromArgs = (args) => args.find((a) => /\.incogmech$/i.test(a) && fs.existsSync(a)) || null;
+const readProjectFile = (file) => {
+  try {
+    return { ok: true, path: file, content: fs.readFileSync(file, "utf8") };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+};
+ipcMain.handle("file:pending", () => {
+  const file = pendingFile;
+  pendingFile = null;
+  return file ? readProjectFile(file) : null;
+});
+
 // ---------- the window ----------
 let mainWindow = null;
 
@@ -155,7 +171,10 @@ function setupUpdates(win) {
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  app.on("second-instance", () => {
+  pendingFile = fileFromArgs(process.argv);
+  app.on("second-instance", (_event, argv) => {
+    const file = fileFromArgs(argv);
+    if (file && mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("file:open", readProjectFile(file));
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.focus();

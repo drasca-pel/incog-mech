@@ -3,7 +3,7 @@ import { TOPICS } from "../core/topics.js";
 
 // Brand and project tabs, like drawing tabs in AutoCAD.
 // Double-click a tab to rename it.
-export default function TitleBar({ projects, activeId, onSelect, onAdd, onClose, onRename, topic = "sandbox", onTopic }) {
+export default function TitleBar({ projects, activeId, onSelect, onAdd, onClose, onRename, topic = "sandbox", onTopic, used = [] }) {
   const [editing, setEditing] = useState(null);
 
   return (
@@ -14,7 +14,7 @@ export default function TitleBar({ projects, activeId, onSelect, onAdd, onClose,
       {onTopic && (
         <div className="modes" role="group" aria-label="Topic">
           {TOPICS.map((t) => (
-            <button key={t.id} aria-pressed={topic === t.id} title={t.blurb} onClick={() => onTopic(t.id)}>{t.name}</button>
+            <button key={t.id} aria-pressed={topic === t.id} title={t.blurb} onClick={() => onTopic(t.id)}>{t.name}{used.includes(t.id) ? " •" : ""}</button>
           ))}
         </div>
       )}

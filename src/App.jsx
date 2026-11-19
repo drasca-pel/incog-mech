@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import "./shell.css";
 import { TOOLS, findTools, toolsForTopic } from "./tools/index.js";
-import { applyTopic, topicById } from "./core/topics.js";
+import { goToTopic, topicById } from "./core/topics.js";
 import { analyze } from "./analysis/index.js";
 import { itemType } from "./core/itemTypes.js";
 import { addItem, updateItem, removeItem } from "./core/scene.js";
@@ -62,6 +62,10 @@ export default function App() {
   const active = state.projects.find((p) => p.id === state.activeId) || null;
   const topic = active ? active.topic || "sandbox" : "sandbox";
   const tools = toolsForTopic(topic);
+  // Topics that hold a drawing in this project (shown with a dot in the title bar)
+  const usedTopics = active
+    ? [topic, ...Object.keys(active.spaces || {})].filter((id) => (id === topic ? active.scene : active.spaces[id].scene).items.length > 0)
+    : [];
   const tool = tools.find((t) => t.id === activeTool) || TOOLS.find((t) => t.id === "select");
   const simActive = simStatus !== "idle" && simScene;
   const shownScene = active ? (simActive ? simScene : active.scene) : null;
@@ -97,11 +101,16 @@ export default function App() {
     }
   };
 
+  // One project holds a separate workspace for each topic. Saving the project saves them all.
   const switchTopic = (id) => {
+    if (!active) {
+      addProject();
+    }
     resetSim();
-    updateActive((p) => applyTopic(p, id, sizeRef.current));
+    updateActive((p) => goToTopic(p, id, sizeRef.current));
+    setSelectedId(null);
     setActiveTool("select");
-    setMessage(`${topicById(id).name}: ${topicById(id).blurb}`);
+    setMessage(`${topicById(id).name}: its own workspace, separate from the other topics. ${topicById(id).blurb}`);
   };
 
   // ----- projects -----
@@ -289,14 +298,10 @@ export default function App() {
     }
   };
 
-  const openProject = async () => {
-    if (!hasDesktop()) {
-      setMessage("Opening files works in the desktop app. In this browser your work is kept automatically.");
-      return;
-    }
+  // Used by the Open button and by a file double-clicked in Windows
+  const openFileResult = (res) => {
     try {
-      const res = await window.api.openProject();
-      if (res.canceled) return;
+      if (!res || res.canceled) return;
       if (!res.ok) throw new Error(res.error);
       const already = stateRef.current.projects.find((p) => p.filePath === res.path);
       if (already) {
@@ -316,6 +321,27 @@ export default function App() {
       setMessage(`Could not open: ${err.message}`);
     }
   };
+  const openFileRef = useRef(openFileResult);
+  openFileRef.current = openFileResult;
+
+  const openProject = async () => {
+    if (!hasDesktop()) {
+      setMessage("Opening files works in the desktop app. In this browser your work is kept automatically.");
+      return;
+    }
+    try {
+      openFileResult(await window.api.openProject());
+    } catch (err) {
+      setMessage(`Could not open: ${err.message}`);
+    }
+  };
+
+  // A project file double-clicked in Windows: open it once the app is ready, and again if the app is already running
+  useEffect(() => {
+    if (!ready || !hasDesktop() || !window.api.pendingFile) return undefined;
+    window.api.pendingFile().then((res) => res && openFileRef.current(res));
+    return window.api.onOpenFile((res) => openFileRef.current(res));
+  }, [ready]);
 
   // ----- tools and actions -----
   const runAction = (id) => {
@@ -501,7 +527,8 @@ export default function App() {
         onClose={closeProject}
         onRename={renameProject}
         topic={topic}
-        onTopic={active ? switchTopic : undefined}
+        onTopic={switchTopic}
+        used={usedTopics}
       />
 
       <Ribbon tools={tools.filter((t) => t.ready)} activeTool={activeTool} toggles={{ grid, axes, snap }} onActivate={activate} topicName={topic !== "sandbox" ? topicById(topic).name : null} />
