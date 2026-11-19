@@ -1,5 +1,4 @@
 
-# Build Windows installer and publish it to GitHub Releases
 name: Release
 
 on:
@@ -26,7 +25,34 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build and publish installer
-        run: npm run release
+      - name: Build installer without publishing
+        run: npm run dist
+
+      - name: Verify installer files
+        shell: pwsh
+        run: |
+          Get-ChildItem release -File | Format-Table Name, Length
+
+          $installer = Get-ChildItem release -Filter "*.exe" |
+            Where-Object { $_.Name -notmatch "uninstaller" } |
+            Select-Object -First 1
+
+          if (-not $installer) {
+            throw "Windows installer was not created."
+          }
+
+          if (-not (Test-Path "release/latest.yml")) {
+            throw "latest.yml was not created."
+          }
+
+      - name: Upload installer to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+          fail_on_unmatched_files: true
+          make_latest: true
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
