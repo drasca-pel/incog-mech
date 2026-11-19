@@ -7,7 +7,7 @@ const { autoUpdater } = require("electron-updater");
 const workspaceFile = () => path.join(app.getPath("userData"), "workspace.json");
 // This app saves its own .incogmech files so they never clash with other apps that use .incog.
 // Old .incog files made by this app can still be opened.
-const FILTERS = [{ name: "INCOG Mechanics project", extensions: ["incogmech", "incog"] }];
+const FILTERS = [{ name: "INCOG Mechanics workspace or project", extensions: ["incogmech", "incog"] }];
 
 // Write to a temporary file first, then swap it in. If the computer dies half way through,
 // the old save is still there and untouched, never a half-written file.
@@ -90,22 +90,6 @@ ipcMain.handle("project:open", async (event) => {
   }
 });
 
-// A .incogmech file double-clicked in Windows (or sent to the app while it is already open)
-let pendingFile = null;
-const fileFromArgs = (args) => args.find((a) => /\.incogmech$/i.test(a) && fs.existsSync(a)) || null;
-const readProjectFile = (file) => {
-  try {
-    return { ok: true, path: file, content: fs.readFileSync(file, "utf8") };
-  } catch (err) {
-    return { ok: false, error: err.message };
-  }
-};
-ipcMain.handle("file:pending", () => {
-  const file = pendingFile;
-  pendingFile = null;
-  return file ? readProjectFile(file) : null;
-});
-
 // ---------- the window ----------
 let mainWindow = null;
 
@@ -171,10 +155,7 @@ function setupUpdates(win) {
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  pendingFile = fileFromArgs(process.argv);
-  app.on("second-instance", (_event, argv) => {
-    const file = fileFromArgs(argv);
-    if (file && mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("file:open", readProjectFile(file));
+  app.on("second-instance", () => {
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.focus();

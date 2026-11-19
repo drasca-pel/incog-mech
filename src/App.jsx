@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import "./shell.css";
 import { TOOLS, findTools, toolsForTopic } from "./tools/index.js";
-import { goToTopic, topicById } from "./core/topics.js";
+import { applyTopic, topicById } from "./core/topics.js";
 import { analyze } from "./analysis/index.js";
 import { itemType } from "./core/itemTypes.js";
 import { addItem, updateItem, removeItem } from "./core/scene.js";
@@ -13,7 +13,7 @@ import { createSim } from "./sim/index.js";
 import { newProject, zoomView, fitRoom, DEFAULT_VIEW } from "./core/projects.js";
 import { liveEnv } from "./core/env.js";
 import {
-  hasDesktop, loadWorkspace, saveWorkspace, saveWorkspaceNow, workspaceToJson, projectFileJson, projectFromFileText,
+  hasDesktop, loadWorkspace, saveWorkspace, saveWorkspaceNow, workspaceToJson, workspaceFileJson, workspaceFromFileText,
 } from "./core/storage.js";
 import TitleBar from "./ui/TitleBar.jsx";
 import Ribbon from "./ui/Ribbon.jsx";
@@ -62,10 +62,6 @@ export default function App() {
   const active = state.projects.find((p) => p.id === state.activeId) || null;
   const topic = active ? active.topic || "sandbox" : "sandbox";
   const tools = toolsForTopic(topic);
-  // Topics that hold a drawing in this project (shown with a dot in the title bar)
-  const usedTopics = active
-    ? [topic, ...Object.keys(active.spaces || {})].filter((id) => (id === topic ? active.scene : active.spaces[id].scene).items.length > 0)
-    : [];
   const tool = tools.find((t) => t.id === activeTool) || TOOLS.find((t) => t.id === "select");
   const simActive = simStatus !== "idle" && simScene;
   const shownScene = active ? (simActive ? simScene : active.scene) : null;
@@ -101,16 +97,11 @@ export default function App() {
     }
   };
 
-  // One project holds a separate workspace for each topic. Saving the project saves them all.
   const switchTopic = (id) => {
-    if (!active) {
-      addProject();
-    }
     resetSim();
-    updateActive((p) => goToTopic(p, id, sizeRef.current));
-    setSelectedId(null);
+    updateActive((p) => applyTopic(p, id, sizeRef.current));
     setActiveTool("select");
-    setMessage(`${topicById(id).name}: its own workspace, separate from the other topics. ${topicById(id).blurb}`);
+    setMessage(`${topicById(id).name}: ${topicById(id).blurb}`);
   };
 
   // ----- projects -----
@@ -274,55 +265,29 @@ export default function App() {
 
   // ----- saving and opening -----
   // Autosave keeps every tab safe on its own. Save and Open are for a project file you choose.
-  const fileName = (p) => p.name.replace(/[\\/:*?"<>|]+/g, "_");
-
   const saveProject = async (askWhere) => {
-    if (!active) return;
+    if (!stateRef.current.projects.length) return;
     if (!hasDesktop()) {
-      setMessage("Saving to a file works in the desktop app. In this browser your work is kept automatically.");
+      // Browser mode persists the complete workspace automatically.
+      await saveWorkspace(workspaceToJson(stateRef.current.projects, stateRef.current.activeId, {}));
+      setMessage("All projects and topic workspaces saved in this browser.");
       return;
     }
-    const id = active.id;
-    const json = projectFileJson(active);
+    const current = stateRef.current;
+    const existingPath = current.projects.find((p) => p.filePath)?.filePath;
+    const json = workspaceFileJson(current.projects, current.activeId);
     try {
-      const res =
-        active.filePath && !askWhere
-          ? await window.api.saveProject(active.filePath, json)
-          : await window.api.saveProjectAs(fileName(active), json);
+      const res = existingPath && !askWhere
+        ? await window.api.saveProject(existingPath, json)
+        : await window.api.saveProjectAs("INCOG-Mechanics-Workspace", json);
       if (res.canceled) return;
       if (!res.ok) throw new Error(res.error);
-      setState((s) => ({ ...s, projects: s.projects.map((p) => (p.id === id ? { ...p, filePath: res.path } : p)) }));
-      setMessage(`Saved to ${res.path}`);
+      setState((s) => ({ ...s, projects: s.projects.map((p) => ({ ...p, filePath: res.path })) }));
+      setMessage(`Complete workspace saved to ${res.path}`);
     } catch (err) {
-      setMessage(`Could not save: ${err.message}`);
+      setMessage(`Could not save workspace: ${err.message}`);
     }
   };
-
-  // Used by the Open button and by a file double-clicked in Windows
-  const openFileResult = (res) => {
-    try {
-      if (!res || res.canceled) return;
-      if (!res.ok) throw new Error(res.error);
-      const already = stateRef.current.projects.find((p) => p.filePath === res.path);
-      if (already) {
-        resetSim();
-        setState((s) => ({ ...s, activeId: already.id }));
-        setSelectedId(null);
-        setMessage(`${already.name} is already open.`);
-        return;
-      }
-      counter.current += 1;
-      const p = { ...projectFromFileText(res.content, counter.current), filePath: res.path };
-      resetSim();
-      setState((s) => ({ projects: [...s.projects, p], activeId: p.id }));
-      setSelectedId(null);
-      setMessage(`Opened ${res.path}`);
-    } catch (err) {
-      setMessage(`Could not open: ${err.message}`);
-    }
-  };
-  const openFileRef = useRef(openFileResult);
-  openFileRef.current = openFileResult;
 
   const openProject = async () => {
     if (!hasDesktop()) {
@@ -330,18 +295,20 @@ export default function App() {
       return;
     }
     try {
-      openFileResult(await window.api.openProject());
+      const res = await window.api.openProject();
+      if (res.canceled) return;
+      if (!res.ok) throw new Error(res.error);
+      const restored = workspaceFromFileText(res.content);
+      const projects = restored.projects.map((p) => ({ ...p, filePath: res.path }));
+      counter.current += projects.length;
+      resetSim();
+      setState({ projects, activeId: restored.activeId });
+      setSelectedId(null);
+      setMessage(`Opened ${projects.length} project(s), including all saved topic workspaces.`);
     } catch (err) {
       setMessage(`Could not open: ${err.message}`);
     }
   };
-
-  // A project file double-clicked in Windows: open it once the app is ready, and again if the app is already running
-  useEffect(() => {
-    if (!ready || !hasDesktop() || !window.api.pendingFile) return undefined;
-    window.api.pendingFile().then((res) => res && openFileRef.current(res));
-    return window.api.onOpenFile((res) => openFileRef.current(res));
-  }, [ready]);
 
   // ----- tools and actions -----
   const runAction = (id) => {
@@ -527,8 +494,7 @@ export default function App() {
         onClose={closeProject}
         onRename={renameProject}
         topic={topic}
-        onTopic={switchTopic}
-        used={usedTopics}
+        onTopic={active ? switchTopic : undefined}
       />
 
       <Ribbon tools={tools.filter((t) => t.ready)} activeTool={activeTool} toggles={{ grid, axes, snap }} onActivate={activate} topicName={topic !== "sandbox" ? topicById(topic).name : null} />

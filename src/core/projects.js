@@ -22,6 +22,8 @@ export function newProject(number) {
     scene: emptyScene(),
     past: [],
     future: [],
+    // Saved snapshots for other topic workspaces within this project.
+    workspaces: {},
   };
 }
 

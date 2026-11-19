@@ -18,58 +18,39 @@ export const hasDesktop = () => typeof window !== "undefined" && Boolean(window.
 
 // ----- one project <-> plain data -----
 
-// One workspace (the drawing, room, view and gravity of one topic)
-const spaceToData = (p) => ({ view: p.view, gravity: p.gravity, env: p.env, viewed: p.viewed, scene: p.scene });
-
 // What is written to disk. Undo history and the running simulation are not saved.
-// One project holds the workspace of every topic you used, so one file keeps all of it.
 export const projectToData = (p) => ({
   name: p.name,
   topic: p.topic,
-  ...spaceToData(p),
-  spaces: Object.fromEntries(Object.entries(p.spaces || {}).map(([id, sp]) => [id, spaceToData(sp)])),
+  view: p.view,
+  gravity: p.gravity,
+  env: p.env,
+  viewed: p.viewed,
+  scene: p.scene,
+  workspaces: p.workspaces || {},
 });
 
-function spaceFromData(d) {
+// Turn data read from disk back into a full project. Anything missing gets its default,
+// so files written by an older version of the app still open.
+export function projectFromData(d, number = 1) {
   if (!d || typeof d !== "object" || !d.scene || !Array.isArray(d.scene.items)) {
     throw new Error("this file is not an INCOG Mechanics project.");
   }
+  const base = newProject(number);
   const env = newEnv();
   for (const part of Object.keys(env)) env[part] = { ...env[part], ...(d.env && d.env[part]) };
   const items = d.scene.items.filter((i) => i && itemType(i.type)); // skip anything this version does not know
   const maxId = items.reduce((m, i) => Math.max(m, Number(i.id) || 0), 0);
   return {
+    ...base,
+    topic: typeof d.topic === "string" ? d.topic : "sandbox",
+    name: typeof d.name === "string" && d.name.trim() ? d.name : base.name,
     view: { ...DEFAULT_VIEW, ...d.view },
     gravity: typeof d.gravity === "number" ? d.gravity : 9.81,
     env,
     viewed: Array.isArray(d.viewed) ? d.viewed : [],
     scene: { items, nextId: Math.max(Number(d.scene.nextId) || 1, maxId + 1) },
-    past: [],
-    future: [],
-  };
-}
-
-// Turn data read from disk back into a full project. Anything missing gets its default,
-// so files written by an older version of the app still open.
-export function projectFromData(d, number = 1) {
-  const base = newProject(number);
-  const main = spaceFromData(d);
-  const spaces = {};
-  if (d.spaces && typeof d.spaces === "object") {
-    for (const [id, sp] of Object.entries(d.spaces)) {
-      try {
-        spaces[id] = spaceFromData(sp);
-      } catch {
-        // a damaged workspace is skipped, the rest still opens
-      }
-    }
-  }
-  return {
-    ...base,
-    ...main,
-    spaces,
-    topic: typeof d.topic === "string" ? d.topic : "sandbox",
-    name: typeof d.name === "string" && d.name.trim() ? d.name : base.name,
+    workspaces: d.workspaces && typeof d.workspaces === "object" ? d.workspaces : {},
     filePath: typeof d.filePath === "string" ? d.filePath : null,
   };
 }
@@ -87,6 +68,28 @@ export function projectFromFileText(text, number) {
   }
   if (!raw || raw.app !== "incog-mech") throw new Error("this file was not made by INCOG Mechanics (it may belong to another app).");
   return projectFromData(raw.project, number);
+}
+
+// A .incogmech file stores the COMPLETE workspace: all project tabs and all topic workspaces.
+export const workspaceFileJson = (projects, activeId) =>
+  JSON.stringify({ app: "incog-mech", format: FORMAT, kind: "workspace", ...JSON.parse(workspaceToJson(projects, activeId)) }, null, 1);
+
+export function workspaceFromFileText(text) {
+  let raw;
+  try { raw = JSON.parse(text); }
+  catch { throw new Error("This file is damaged or is not a valid INCOG Mechanics file."); }
+  if (!raw || raw.app !== "incog-mech") throw new Error("This file was not created by INCOG Mechanics.");
+  if (Array.isArray(raw.projects)) {
+    const restored = workspaceFromJson(text);
+    if (!restored || !restored.projects.length) throw new Error("No valid projects were found in this file.");
+    return restored;
+  }
+  // Older versions saved one project per file. Continue to support those files.
+  if (raw.project) {
+    const project = projectFromData(raw.project, 1);
+    return { projects: [project], activeId: project.id, extra: {} };
+  }
+  throw new Error("This INCOG Mechanics file contains no projects.");
 }
 
 // ----- the whole workspace (all tabs) -----
