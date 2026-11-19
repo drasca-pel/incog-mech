@@ -14,6 +14,7 @@ export function newProject(number) {
   return {
     id: `p${Date.now()}_${counter}`,
     name: `Project ${number}`,
+    topic: "sandbox", // sandbox, projectile, dynamics, collisions, statics or energy
     view: { ...DEFAULT_VIEW },
     gravity: 9.81, // m/s², editable per project
     env: newEnv(), // ground, limits and air resistance

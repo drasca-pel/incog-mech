@@ -1,29 +1,33 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Icon from "../core/icons.jsx";
 import { TABS } from "../tools/index.js";
 
 // Tabs and tool groups. Everything shown here comes from the tool catalog.
 // The arrow at the right collapses the tool panel to give the drawing more room.
-export default function Ribbon({ tools, activeTool, toggles, onActivate }) {
+export default function Ribbon({ tools, activeTool, toggles, onActivate, topicName }) {
   const [tab, setTab] = useState("Home");
+  const label = (name) => (name === "Topic" ? topicName || "Topic" : name);
   const [collapsed, setCollapsed] = useState(false);
-  const inTab = tools.filter((t) => t.tab === tab);
+  useEffect(() => setTab(topicName ? "Topic" : "Home"), [topicName]);
+  const tabs = TABS.filter((name) => tools.some((t) => t.tab === name));
+  const current = tabs.includes(tab) ? tab : "Home";
+  const inTab = tools.filter((t) => t.tab === current);
   const groups = [...new Set(inTab.map((t) => t.group))];
 
   return (
     <section className="ribbon">
       <div className="ribbon-tabs" role="tablist">
-        {TABS.filter((name) => tools.some((t) => t.tab === name)).map((name) => (
+        {tabs.map((name) => (
           <button
             key={name}
             role="tab"
-            aria-selected={name === tab}
+            aria-selected={name === current}
             onClick={() => {
               setTab(name);
               setCollapsed(false);
             }}
           >
-            {name}
+            {label(name)}
           </button>
         ))}
         <button

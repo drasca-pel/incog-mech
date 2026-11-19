@@ -2,6 +2,23 @@
 
 // They are bundled in the app, so they work fully offline.
 const ICONS = {
+  answers: <path d="M4 5h16v11H9l-5 4zM8 9h8M8 12.5h5" />,
+  launchBall: (<><circle cx="5" cy="18" r="2" /><path d="M7 16c3-8 9-9 13-5M20 11l-4-.5M20 11l-1 4" /></>),
+  launchBlock: (<><rect x="3" y="15" width="5" height="5" rx="1" /><path d="M9 14c3-8 8-9 11-4M20 10l-4-.5M20 10l-1 4" /></>),
+  target: (<><circle cx="12" cy="12" r="8" /><circle cx="12" cy="12" r="4" /><circle cx="12" cy="12" r="0.8" /></>),
+  platform: <path d="M3 10h18M5 10l-2 3M9 10l-2 3M13 10l-2 3M17 10l-2 3M21 10l-2 3" />,
+  slope: (<><path d="M3 19h18L3 8z" /><rect x="7" y="8" width="5" height="4" rx="0.5" transform="rotate(30 9.5 10)" /></>),
+  pushed: (<><rect x="9" y="10" width="9" height="8" rx="1" /><path d="M2 14h6M5.5 11.5L8 14l-2.5 2.5M3 20h18" /></>),
+  cart: (<><rect x="8" y="9" width="12" height="7" rx="1.5" /><circle cx="11" cy="18.5" r="1.5" /><circle cx="17" cy="18.5" r="1.5" /><path d="M2 12.5h4M4.5 10.5l1.8 2-1.8 2" /></>),
+  cartRest: (<><rect x="6" y="9" width="12" height="7" rx="1.5" /><circle cx="9" cy="18.5" r="1.5" /><circle cx="15" cy="18.5" r="1.5" /></>),
+  sticky: (<><rect x="8" y="9" width="12" height="7" rx="1.5" strokeDasharray="3 2" /><circle cx="11" cy="18.5" r="1.5" /><circle cx="17" cy="18.5" r="1.5" /><path d="M2 12.5h4M4.5 10.5l1.8 2-1.8 2" /></>),
+  stickyRest: (<><rect x="6" y="9" width="12" height="7" rx="1.5" strokeDasharray="3 2" /><circle cx="9" cy="18.5" r="1.5" /><circle cx="15" cy="18.5" r="1.5" /></>),
+  puck: (<><circle cx="14" cy="12" r="5" /><path d="M2 12h5M4.5 9.5L7 12l-2.5 2.5" /></>),
+  puckRest: <circle cx="12" cy="12" r="5" />,
+  hanging: (<><path d="M3 4h5M16 3h5M5 4l7 10M18 3l-6 11" /><rect x="9" y="14" width="6" height="6" rx="1" /></>),
+  beamSupports: (<><rect x="3" y="8" width="18" height="3" rx="0.5" /><path d="M5 11l-2.5 6h5zM19 11l-2.5 6h5z" /><path d="M12 2v5M10 5l2 2 2-2" /></>),
+  pendulum: (<><path d="M12 3v1M12 4l-5 10" /><circle cx="6" cy="16" r="3" /><path d="M3 4h18" /></>),
+  springMass: (<><path d="M4 3h16M12 3v2l-3 1.5 6 2-6 2 6 2-3 1.5" /><rect x="8.5" y="15.5" width="7" height="5" rx="1" /></>),
   select: <path d="M6 3l11 8.5-5 1.2 3 6-2.3 1.1-3-6L6 18z" />,
   pan: <path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3" />,
   undo: <path d="M9 14L4 9l5-5M4 9h11a5.5 5.5 0 0 1 0 11H9" />,

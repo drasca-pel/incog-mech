@@ -21,7 +21,7 @@ const clampScale = (s) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, s));
 const ARC_R = 30; // radius of the angle arcs in pixels
 
 export default function CanvasView({
-  view, grid, axes, snap, tool, scene, selectedId, readOnly, env, pins,
+  view, grid, axes, snap, tool, scene, selectedId, readOnly, env, pins, overlay,
   onView, onSize, onCursor, onSelect, onAddItem, onBeginEdit, onLiveEdit, onFinish,
 }) {
   const wrapRef = useRef(null);
@@ -109,10 +109,10 @@ export default function CanvasView({
     canvas.height = size.h * dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     let preview = null;
-    if (pointer && twoPoint && draft) preview = tool.behavior.create(draft.a, pointer);
-    else if (pointer && kindOf === "place") preview = tool.behavior.create(pointer);
-    draw(ctx, size, view, { grid, axes }, marker, scene, angles, selectedId, preview, kindOf === "place", { env, pins });
-  }, [size, view, grid, axes, marker, scene, selectedId, draft, pointer, tool, env, pins]);
+    if (pointer && twoPoint && draft) preview = tool.behavior.create(draft.a, pointer, { env });
+    else if (pointer && kindOf === "place") preview = tool.behavior.create(pointer, { env });
+    draw(ctx, size, view, { grid, axes }, marker, scene, angles, selectedId, preview, kindOf === "place", { env, pins, overlay });
+  }, [size, view, grid, axes, marker, scene, selectedId, draft, pointer, tool, env, pins, overlay]);
 
   const local = (e) => {
     const r = canvasRef.current.getBoundingClientRect();
@@ -203,14 +203,14 @@ export default function CanvasView({
         return;
       }
       const b = e.shiftKey ? constrainAngle(draft.a, p) : p;
-      if (dist(draft.a, b) > 0.0005) onAddItem(tool.behavior.create(draft.a, b));
+      if (dist(draft.a, b) > 0.0005) onAddItem(tool.behavior.create(draft.a, b, { env }));
       setDraft(null);
       setTyping(null);
       return;
     }
 
     if (kindOf === "place") {
-      onAddItem(tool.behavior.create(snapPoint(raw).p));
+      onAddItem(tool.behavior.create(snapPoint(raw).p, { env }));
       return;
     }
 
@@ -328,7 +328,7 @@ export default function CanvasView({
     const A = parseFloat(typing.angle);
     const length = Number.isFinite(L) && L > 0 ? L : pointer ? dist(draft.a, pointer) : 1;
     const angle = Number.isFinite(A) ? A : pointer ? angleBetween(draft.a, pointer) : 0;
-    onAddItem(tool.behavior.create(draft.a, pointAt(draft.a, length, angle)));
+    onAddItem(tool.behavior.create(draft.a, pointAt(draft.a, length, angle), { env }));
     setDraft(null);
     setTyping(null);
     onFinish(); // Enter ends the command and brings back the normal cursor
@@ -531,6 +531,37 @@ function drawTrails(ctx, toScreen, trails) {
   ctx.restore();
 }
 
+// Predicted paths (dashed) and the points they end at
+function drawOverlay(ctx, toScreen, overlay) {
+  ctx.save();
+  ctx.lineWidth = 2;
+  ctx.setLineDash([8, 6]);
+  for (const path of overlay.paths || []) {
+    ctx.strokeStyle = path.color || "#4cc9f0";
+    ctx.beginPath();
+    path.pts.forEach((p, i) => {
+      const q = toScreen(p);
+      if (i === 0) ctx.moveTo(q.x, q.y);
+      else ctx.lineTo(q.x, q.y);
+    });
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  for (const m of overlay.marks || []) {
+    const q = toScreen(m.p);
+    ctx.strokeStyle = "#4cc9f0";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(q.x, q.y, 6, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = "#4cc9f0";
+    ctx.font = `600 12px ${MONO}`;
+    ctx.textAlign = "center";
+    ctx.fillText(m.text, q.x, q.y + 22);
+  }
+  ctx.restore();
+}
+
 // Values pinned with "View". Several on one object stack so they do not overlap.
 function drawPins(ctx, toScreen, pins) {
   const used = new Map();
@@ -650,6 +681,9 @@ function draw(ctx, { w, h }, view, show, marker, scene, angles, selectedId, prev
   // Angles where lines meet
   for (const a of angles) drawAngle(ctx, toScreen, a, a.key === selectedId);
 
+  // Predicted paths and landing marks from the Answers
+  if (extras.overlay) drawOverlay(ctx, toScreen, extras.overlay);
+
   // Values pinned from the Results list
   if (extras.pins) drawPins(ctx, toScreen, extras.pins);
 
@@ -670,13 +704,18 @@ function draw(ctx, { w, h }, view, show, marker, scene, angles, selectedId, prev
 
   // Drawing in progress (line) or the object about to be placed (ghost)
   if (preview) {
+    const list = Array.isArray(preview) ? preview : [preview];
     ctx.save();
     ctx.globalAlpha = ghost ? 0.5 : 0.75;
-    itemType(preview.type).draw(g, preview, false);
+    for (const p of list) itemType(p.type).draw(g, p, false);
     ctx.restore();
-    if (!ghost) {
-      const b = toScreen(preview.b);
-      chip(ctx, `${dist(preview.a, preview.b).toFixed(3)} m   ${angleBetween(preview.a, preview.b).toFixed(1)}°`, b.x + 14, b.y - 16);
+    const first = list[0];
+    if (!ghost && first.a && first.b) {
+      const b = toScreen(first.b);
+      chip(ctx, `${dist(first.a, first.b).toFixed(3)} m   ${angleBetween(first.a, first.b).toFixed(1)}°`, b.x + 14, b.y - 16);
+    } else if (!ghost && first.speed0 != null) {
+      const c = toScreen(first);
+      chip(ctx, `${first.speed0.toFixed(2)} m/s   ${first.angle0.toFixed(1)}°`, c.x + 14, c.y + 28);
     }
   }
 

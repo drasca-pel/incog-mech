@@ -51,10 +51,62 @@ function bodyProps(it, def) {
   return out;
 }
 
+// The launch arrow: 1 metre of arrow = 1 m/s. Drag its tip to set speed and direction.
+const velTip = (it) => {
+  const a = ((it.angle0 || 0) * Math.PI) / 180;
+  return { x: it.x + it.speed0 * Math.cos(a), y: it.y + it.speed0 * Math.sin(a) };
+};
+const isBody = (def, it) => def.physics(it).kind === "dynamic";
+
+function drawVelocity(g, it) {
+  const { ctx } = g;
+  const a = g.toScreen(it);
+  const b = g.toScreen(velTip(it));
+  const ang = Math.atan2(b.y - a.y, b.x - a.x);
+  ctx.save();
+  ctx.strokeStyle = "#4cc9f0";
+  ctx.fillStyle = "#4cc9f0";
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(a.x, a.y);
+  ctx.lineTo(b.x, b.y);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(b.x + 3 * Math.cos(ang), b.y + 3 * Math.sin(ang));
+  ctx.lineTo(b.x - 11 * Math.cos(ang - 0.42), b.y - 11 * Math.sin(ang - 0.42));
+  ctx.lineTo(b.x - 11 * Math.cos(ang + 0.42), b.y - 11 * Math.sin(ang + 0.42));
+  ctx.closePath();
+  ctx.fill();
+  ctx.font = '600 12px "Cascadia Mono", Consolas, monospace';
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(`${Math.round(it.speed0 * 100) / 100} m/s  ${Math.round((it.angle0 || 0) * 10) / 10}°`, b.x + Math.cos(ang) * 8 - Math.sin(ang) * 18, b.y + Math.sin(ang) * 8 + Math.cos(ang) * 18);
+  ctx.restore();
+}
+
+function withLaunchArrow(def) {
+  return {
+    ...def,
+    draw(g, it, selected) {
+      def.draw(g, it, selected);
+      if (!it.sim && it.speed0 > 0 && isBody(def, it)) drawVelocity(g, it);
+    },
+    handles: (it) => [...def.handles(it), ...(it.speed0 > 0 && isBody(def, it) ? [{ id: "v", p: velTip(it) }] : [])],
+    moveHandle(it, id, p) {
+      if (id !== "v") return def.moveHandle(it, id, p);
+      const dx = p.x - it.x;
+      const dy = p.y - it.y;
+      const speed = Math.hypot(dx, dy);
+      if (speed < 0.01) return it;
+      return { ...it, speed0: Math.round(speed * 1000) / 1000, angle0: Math.round(((Math.atan2(dy, dx) * 180) / Math.PI + 360) % 360 * 100) / 100 };
+    },
+  };
+}
+
 export function registerItemType(name, def) {
   if (def.physics) {
     const base = def.properties;
-    def = { ...def, properties: (it) => [...base(it), ...bodyProps(it, def)] };
+    def = withLaunchArrow({ ...def, properties: (it) => [...base(it), ...bodyProps(it, def)] });
   }
   types[name] = def;
 }

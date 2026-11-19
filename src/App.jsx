@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import "./shell.css";
-import { TOOLS, findTools } from "./tools/index.js";
+import { TOOLS, findTools, toolsForTopic } from "./tools/index.js";
+import { applyTopic, topicById } from "./core/topics.js";
+import { analyze } from "./analysis/index.js";
 import { itemType } from "./core/itemTypes.js";
 import { addItem, updateItem, removeItem } from "./core/scene.js";
 import { findSelectable } from "./core/selection.js";
@@ -22,10 +24,6 @@ import CommandBar from "./ui/CommandBar.jsx";
 import StatusBar from "./ui/StatusBar.jsx";
 import StartPage from "./ui/StartPage.jsx";
 import EnvPanel from "./ui/EnvPanel.jsx";
-import Workspace from "./modes/Workspace.jsx";
-import { STATICS_TOOLS, STATICS_DEFAULT } from "./modes/statics/StaticsTools.jsx";
-import { MOTION_TOOLS, MOTION_DEFAULT } from "./modes/motion/MotionTools.jsx";
-import "./modes/modes.css";
 
 // The shell: it arranges the screen and passes events around.
 // It knows nothing about specific tools. They come from tools/index.js.
@@ -42,10 +40,6 @@ export default function App() {
     return { projects: [p], activeId: p.id };
   });
   const [ready, setReady] = useState(false); // true once the saved workspace has been read
-  const [mode, setMode] = useState("sandbox"); // sandbox, statics or motion
-  const [modeData, setModeData] = useState({}); // what was typed into the Statics and Motion tools
-  const modeRef = useRef("sandbox");
-  const extraRef = useRef({});
   const stateRef = useRef(null); // latest projects, readable when the window closes
   const sizeRef = useRef(null); // size of the drawing area in pixels, for Zoom fit
   const simEnvRef = useRef(null); // the room as it was when Play was pressed
@@ -59,16 +53,16 @@ export default function App() {
   const [axes, setAxes] = useState(true);
   const [snap, setSnap] = useState(true);
   const [cursor, setCursor] = useState(null);
-  const [propsOpen, setPropsOpen] = useState(true);
+  const [propsOpen, setPropsOpen] = useState(false); // closed at first so the drawing has the whole screen
   const [rightTab, setRightTab] = useState("props"); // props | results
   const [envOpen, setEnvOpen] = useState(false);
   const [message, setMessage] = useState("Ready. Pick a tool from the ribbon, or type a command.");
 
   stateRef.current = state;
-  modeRef.current = mode;
-  extraRef.current = { mode, modeData };
   const active = state.projects.find((p) => p.id === state.activeId) || null;
-  const tool = TOOLS.find((t) => t.id === activeTool) || TOOLS[0];
+  const topic = active ? active.topic || "sandbox" : "sandbox";
+  const tools = toolsForTopic(topic);
+  const tool = tools.find((t) => t.id === activeTool) || TOOLS.find((t) => t.id === "select");
   const simActive = simStatus !== "idle" && simScene;
   const shownScene = active ? (simActive ? simScene : active.scene) : null;
   const selectedItem = shownScene ? findSelectable(shownScene, selectedId) : null;
@@ -86,8 +80,29 @@ export default function App() {
         .filter(Boolean)
         .map(({ row, point }) => ({ point, text: `${row.name} · ${row.label} = ${Math.round(row.value * 1000) / 1000} ${row.unit}` }))
     : [];
+  // Answers worked out from the drawing (and the live values while it plays)
+  const effEnv = active ? (simStatus !== "idle" && simEnvRef.current ? simEnvRef.current : liveEnv(active.env, active.view, sizeRef.current)) : null;
+  const answers = active && effEnv ? analyze(active.scene, active.gravity, effEnv, topic, simActive ? simScene : null) : null;
+  const headline = answers
+    ? answers.groups.slice(0, 2).map((g) => ({ id: g.id, title: g.title, chips: g.rows.filter((r) => r.head && typeof r.value === "number").slice(0, 3) }))
+    : [];
   const toggleView = (key) =>
     updateActive((p) => ({ ...p, viewed: p.viewed.includes(key) ? p.viewed.filter((k) => k !== key) : [...p.viewed, key] }));
+
+  const selectItem = (id) => {
+    setSelectedId(id);
+    if (id != null && !propsOpen) {
+      setRightTab("props");
+      setPropsOpen(true);
+    }
+  };
+
+  const switchTopic = (id) => {
+    resetSim();
+    updateActive((p) => applyTopic(p, id, sizeRef.current));
+    setActiveTool("select");
+    setMessage(`${topicById(id).name}: ${topicById(id).blurb}`);
+  };
 
   // ----- projects -----
   const addProject = () => {
@@ -159,10 +174,20 @@ export default function App() {
     );
   };
 
-  const addItemToScene = (item) => {
-    const id = sceneRef.current.nextId;
-    edit((s) => addItem(s, item).scene, id);
-    setSelectedId(id);
+  // A tool can make one item, or a set of them (a pendulum is an anchor, a bob and a rope)
+  const addItemToScene = (made) => {
+    const list = Array.isArray(made) ? made : [made];
+    const first = sceneRef.current.nextId;
+    edit((s) => {
+      let sc = s;
+      for (const it of list) {
+        const id = sc.nextId;
+        sc = settle(addItem(sc, it).scene, id);
+      }
+      return sc;
+    }, first);
+    setSelectedId(first);
+    if (list.length > 1) setMessage("Placed. Everything in the set can be moved or changed on its own.");
   };
 
   const deleteSelected = () => {
@@ -301,7 +326,10 @@ export default function App() {
     else if (id === "zoomOut") updateActive((p) => ({ ...p, view: zoomView(p.view, 0.8) }));
     else if (id === "zoomFit") updateActive((p) => ({ ...p, view: fitRoom(p.env, sizeRef.current) }));
     else if (id === "zoomReset") updateActive((p) => ({ ...p, view: { ...p.view, scale: DEFAULT_VIEW.scale } }));
-    else if (id === "results") {
+    else if (id === "answers") {
+      setRightTab("answers");
+      setPropsOpen(true);
+    } else if (id === "results") {
       setRightTab("results");
       setPropsOpen(true);
     } else if (id === "play") playSim();
@@ -337,7 +365,7 @@ export default function App() {
       setMessage("New project created.");
       return;
     }
-    const found = findTools(q)[0];
+    const found = findTools(q, tools)[0];
     if (!found) setMessage(`Unknown command: ${text}`);
     else activate(found);
   };
@@ -345,7 +373,6 @@ export default function App() {
   // ----- keyboard -----
   useEffect(() => {
     const onKey = (e) => {
-      if (modeRef.current !== "sandbox") return; // Statics and Motion have their own screens
       const mod = e.ctrlKey || e.metaKey;
       // Ctrl and + / - / 0 zoom the drawing, not the whole window
       if (mod && ["+", "=", "-", "_", "0"].includes(e.key)) {
@@ -433,10 +460,6 @@ export default function App() {
           saved.projects.length
         );
         setState(saved);
-        if (saved.extra) {
-          if (["sandbox", "statics", "motion"].includes(saved.extra.mode)) setMode(saved.extra.mode);
-          if (saved.extra.modeData && typeof saved.extra.modeData === "object") setModeData(saved.extra.modeData);
-        }
       }
       setReady(true);
     });
@@ -447,13 +470,13 @@ export default function App() {
 
   useEffect(() => {
     if (!ready) return undefined;
-    const t = setTimeout(() => saveWorkspace(workspaceToJson(state.projects, state.activeId, { mode, modeData })), 500);
+    const t = setTimeout(() => saveWorkspace(workspaceToJson(state.projects, state.activeId, {})), 500);
     return () => clearTimeout(t);
-  }, [ready, state, mode, modeData]);
+  }, [ready, state]);
 
   useEffect(() => {
     const flush = () => {
-      if (stateRef.current && ready) saveWorkspaceNow(workspaceToJson(stateRef.current.projects, stateRef.current.activeId, extraRef.current));
+      if (stateRef.current && ready) saveWorkspaceNow(workspaceToJson(stateRef.current.projects, stateRef.current.activeId, {}));
     };
     window.addEventListener("beforeunload", flush);
     return () => window.removeEventListener("beforeunload", flush);
@@ -463,28 +486,6 @@ export default function App() {
   useEffect(() => (window.api && window.api.onUpdate ? window.api.onUpdate(setMessage) : undefined), []);
 
   if (!ready) return <div className="app" />;
-
-  const switchMode = (m) => {
-    resetSim();
-    setMode(m);
-  };
-  if (mode !== "sandbox") {
-    const isStatics = mode === "statics";
-    return (
-      <div className="app app-mode">
-        <TitleBar projects={state.projects} activeId={state.activeId} onSelect={() => {}} onAdd={() => {}} onClose={() => {}} onRename={() => {}} mode={mode} onMode={switchMode} />
-        <Workspace
-          key={mode}
-          title={isStatics ? "Statics" : "Motion"}
-          blurb={isStatics ? "Forces, moments, equilibrium, friction, centroid and inertia" : "Projectiles, graphs, energy and momentum"}
-          tools={isStatics ? STATICS_TOOLS : MOTION_TOOLS}
-          defaultTool={isStatics ? STATICS_DEFAULT : MOTION_DEFAULT}
-          data={modeData[mode] || {}}
-          onData={(d) => setModeData((m) => ({ ...m, [mode]: d }))}
-        />
-      </div>
-    );
-  }
 
   return (
     <div className="app">
@@ -499,14 +500,14 @@ export default function App() {
         onAdd={addProject}
         onClose={closeProject}
         onRename={renameProject}
-        mode={mode}
-        onMode={switchMode}
+        topic={topic}
+        onTopic={active ? switchTopic : undefined}
       />
 
-      <Ribbon tools={TOOLS.filter((t) => t.ready)} activeTool={activeTool} toggles={{ grid, axes, snap }} onActivate={activate} />
+      <Ribbon tools={tools.filter((t) => t.ready)} activeTool={activeTool} toggles={{ grid, axes, snap }} onActivate={activate} topicName={topic !== "sandbox" ? topicById(topic).name : null} />
 
-      <div className="workspace" style={{ "--props-w": propsOpen ? "280px" : "34px" }}>
-        <LeftBar tools={TOOLS.filter((t) => t.ready)} activeTool={activeTool} onActivate={activate} />
+      <div className="workspace" >
+        <LeftBar tools={tools.filter((t) => t.ready)} activeTool={activeTool} onActivate={activate} />
         {active ? (
           <CanvasView
             key={active.id}
@@ -524,7 +525,8 @@ export default function App() {
               sizeRef.current = s;
             }}
             onCursor={setCursor}
-            onSelect={setSelectedId}
+            onSelect={selectItem}
+            overlay={answers}
             onAddItem={addItemToScene}
             onBeginEdit={beginEdit}
             onLiveEdit={(id, fn) => liveEdit((s) => updateItem(s, id, fn), id)}
@@ -535,6 +537,18 @@ export default function App() {
           />
         ) : (
           <StartPage onNew={addProject} />
+        )}
+        {headline.some((h) => h.chips.length) && (
+          <div className="answer-strip" onClick={() => { setRightTab("answers"); setPropsOpen(true); }} title="Open the Answers">
+            {headline.filter((h) => h.chips.length).map((h) => (
+              <div key={h.id} className="answer-card">
+                <b>{h.title}</b>
+                {h.chips.map((c) => (
+                  <span key={c.label}>{c.label} <em>{Math.round(c.value * 100) / 100} {c.unit}</em></span>
+                ))}
+              </div>
+            ))}
+          </div>
         )}
         <Properties
           key={selectedItem ? selectedItem.id : "none"}
@@ -548,10 +562,11 @@ export default function App() {
           rows={rows}
           viewed={active ? active.viewed : []}
           onToggleView={toggleView}
+          answers={answers}
         />
       </div>
 
-      <CommandBar message={message} onRun={runCommand} />
+      <CommandBar message={message} onRun={runCommand} tools={tools} />
 
       <StatusBar
         grid={grid}

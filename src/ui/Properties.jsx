@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { itemType } from "../core/itemTypes.js";
 import Results from "./Results.jsx";
+import Answers from "./Answers.jsx";
 
 const cap = (s) => s[0].toUpperCase() + s.slice(1);
 
@@ -49,115 +50,78 @@ function NumberField({ prop, onBegin, onEdit }) {
 }
 
 // Right-hand panel: Properties of the selected object, and the Results list
-export default function Properties({ open, onToggle, item, onBeginEdit, onEdit, tab, onTab, rows, viewed, onToggleView }) {
-  const [query, setQuery] = useState("");
-  const [picked, setPicked] = useState(null);
-  const [ok, onKeyDown] = useConfirm();
+export default function Properties({ open, onToggle, item, onBeginEdit, onEdit, tab, onTab, rows, viewed, onToggleView, answers }) {
+  const [, onKeyDown] = useConfirm();
 
   const def = item ? itemType(item.type) : null;
   const props = def ? def.properties(item) : [];
-  const q = query.trim().toLowerCase();
-  const matches = props.filter((p) => p.label.toLowerCase().includes(q));
-  const prop = props.find((p) => p.id === picked) || null;
 
-  const pick = (id) => {
-    setPicked(id);
-    setQuery("");
-  };
+  const TABS = [["props", "Properties"], ["answers", "Answers"], ["results", "Results"]];
+
+  // Closed: a small bar over the drawing. The drawing keeps the whole screen.
+  if (!open) {
+    return (
+      <aside className="props closed" aria-label="Panel">
+        {TABS.map(([id, name]) => (
+          <button key={id} onClick={() => { onTab(id); onToggle(); }}>{name}</button>
+        ))}
+      </aside>
+    );
+  }
 
   return (
-    <aside className={"props" + (open ? "" : " collapsed")} aria-label="Properties">
-      <button
-        className="props-toggle"
-        onClick={onToggle}
-        title={open ? "Collapse panel" : "Expand panel"}
-        aria-label={open ? "Collapse panel" : "Expand panel"}
-      >
-        {open ? "›" : "‹"}
-      </button>
+    <aside className="props" aria-label="Properties">
+      <div className="ptabs-right" role="tablist">
+        {TABS.map(([id, name]) => (
+          <button key={id} role="tab" aria-selected={tab === id} onClick={() => onTab(id)}>{name}</button>
+        ))}
+        <button className="props-toggle" onClick={onToggle} title="Close panel" aria-label="Close panel">×</button>
+      </div>
 
-      {!open && <div className="props-vert">Properties</div>}
+      {tab === "answers" && <Answers answers={answers} />}
 
-      {open && (
-        <div className="ptabs-right" role="tablist">
-          <button role="tab" aria-selected={tab === "props"} onClick={() => onTab("props")}>Properties</button>
-          <button role="tab" aria-selected={tab === "results"} onClick={() => onTab("results")}>Results</button>
-        </div>
-      )}
+      {tab === "results" && <Results rows={rows} viewed={viewed} onToggleView={onToggleView} />}
 
-      {open && tab === "results" && <Results rows={rows} viewed={viewed} onToggleView={onToggleView} />}
-
-      {open && tab === "props" && !item && (
+      {tab === "props" && !item && (
         <div className="props-body">
           <h3>Properties</h3>
-          <p className="hint">Nothing selected. Select an object to see and change one property at a time.</p>
+          <p className="hint">Nothing selected. Click an object to see and change its values.</p>
         </div>
       )}
 
-      {open && tab === "props" && item && (
+      {tab === "props" && item && (
         <div className="props-body">
           <h3>{def.title(item)}</h3>
-          <input
-            className="textin"
-            placeholder="Type a property, e.g. length"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && matches[0] && pick(matches[0].id)}
-          />
-          <div className="chips">
-            {matches.map((p) => (
-              <button key={p.id} className="chip-btn" aria-pressed={picked === p.id} onClick={() => pick(p.id)}>
-                {p.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="editor">
-            {!prop && <p className="hint">Pick a property above to change it.</p>}
-            {prop && prop.kind === "number" && (
-              <NumberField key={prop.id} prop={prop} onBegin={onBeginEdit} onEdit={onEdit} />
-            )}
-            {prop && prop.kind === "readout" && (
-              <div className="field">
-                <span className="field-top">
-                  <span>{prop.label}</span>
-                  <span className="unit">{prop.unit}</span>
-                </span>
-                <div className="readout num">{String(Math.round(prop.value * 1000) / 1000)}</div>
-              </div>
-            )}
-            {prop && prop.kind === "button" && (
-              <button className="btn wide" onClick={() => { onBeginEdit(); onEdit(prop.id, true); }}>
-                {prop.label}
-              </button>
-            )}
-            {prop && prop.kind === "text" && (
-              <label className="field">
-                <span className="field-top"><span>{prop.label}</span><span className="unit">{ok ? "✓" : ""}</span></span>
-                <input
-                  className="textin"
-                  value={prop.value}
-                  onFocus={onBeginEdit}
-                  onChange={(e) => onEdit(prop.id, e.target.value)}
-                  onKeyDown={onKeyDown}
-                />
-              </label>
-            )}
-            {prop && prop.kind === "choice" && (
-              <label className="field">
+          {props.map((prop) => {
+            if (prop.kind === "number") return <NumberField key={prop.id} prop={prop} onBegin={onBeginEdit} onEdit={onEdit} />;
+            if (prop.kind === "readout")
+              return (
+                <div className="field" key={prop.id}>
+                  <span className="field-top"><span>{prop.label}</span><span className="unit">{prop.unit}</span></span>
+                  <div className="readout num">{String(Math.round(prop.value * 1000) / 1000)}</div>
+                </div>
+              );
+            if (prop.kind === "button")
+              return <button key={prop.id} className="btn wide" onClick={() => { onBeginEdit(); onEdit(prop.id, true); }}>{prop.label}</button>;
+            if (prop.kind === "text")
+              return (
+                <label className="field" key={prop.id}>
+                  <span className="field-top"><span>{prop.label}</span></span>
+                  <input className="textin" value={prop.value} onFocus={onBeginEdit} onChange={(e) => onEdit(prop.id, e.target.value)} onKeyDown={onKeyDown} />
+                </label>
+              );
+            return (
+              <label className="field" key={prop.id}>
                 <span className="field-top"><span>{prop.label}</span></span>
                 <select className="textin" value={prop.value} onChange={(e) => { onBeginEdit(); onEdit(prop.id, e.target.value); }}>
                   {prop.options.map((o) => {
                     const value = typeof o === "string" ? o : o.value;
-                    const text = typeof o === "string" ? cap(o) : o.label;
-                    return (
-                      <option key={value} value={value}>{text}</option>
-                    );
+                    return <option key={value} value={value}>{typeof o === "string" ? cap(o) : o.label}</option>;
                   })}
                 </select>
               </label>
-            )}
-          </div>
+            );
+          })}
         </div>
       )}
     </aside>

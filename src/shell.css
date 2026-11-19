@@ -120,7 +120,8 @@
 /* ---------- Workspace ---------- */
 .workspace {
   display: grid;
-  grid-template-columns: 42px 1fr var(--props-w, 280px);
+  grid-template-columns: 42px 1fr;
+  position: relative;
   min-height: 0;
 }
 .leftbar {
@@ -417,3 +418,37 @@
 .env-actions button:hover { background: rgba(255, 255, 255, 0.09); }
 
 .env-title { margin: 12px 0 4px; font-size: 10.5px; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); }
+/* ---------- Topic switcher ---------- */
+.modes { display: flex; align-items: center; gap: 2px; margin: 0 14px 4px 6px; padding: 2px; background: rgba(255,255,255,.05); border-radius: 7px; align-self: center; }
+.modes button { padding: 4px 11px; border: 0; border-radius: 5px; background: transparent; color: var(--muted); font: inherit; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.modes button:hover { color: var(--text); }
+.modes button[aria-pressed="true"] { background: var(--accent); color: #1a1405; }
+
+/* ---------- Floating panel: it sits over the drawing, so the drawing keeps the whole screen ---------- */
+.props {
+  position: absolute; top: 10px; right: 10px; z-index: 8;
+  width: 300px; max-height: calc(100% - 20px); overflow-y: auto;
+  background: rgba(18, 26, 44, .95); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, .5);
+}
+.props.closed { display: flex; width: auto; padding: 3px; gap: 2px; overflow: visible; }
+.props.closed button { padding: 5px 11px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font-size: 12.5px; }
+.props.closed button:hover { background: rgba(255,255,255,.08); color: var(--text); }
+.props .props-toggle { position: static; margin: 0 0 0 auto; align-self: center; }
+.props .ptabs-right { padding: 6px 8px 0 10px; position: sticky; top: 0; background: rgba(18, 26, 44, .98); z-index: 1; }
+.props-body { padding: 12px 14px 16px; }
+.props-body h3 { margin: 0 0 10px; }
+.props-body h4 { margin: 14px 0 4px; font-size: 13px; color: var(--accent); }
+.props .field { margin-bottom: 10px; }
+.btn { padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--chrome-2); color: var(--text); margin-bottom: 10px; }
+.btn:hover { border-color: var(--accent); }
+.hint.small { font-size: 12px; margin: 6px 0 0; }
+.results li.live .r-name { color: var(--accent); }
+.ans-group { margin-bottom: 8px; }
+
+/* ---------- Headline answers over the drawing ---------- */
+.answer-strip { position: absolute; left: 56px; bottom: 12px; z-index: 6; display: flex; flex-direction: column; gap: 6px; max-width: calc(100% - 340px); cursor: pointer; }
+.answer-card { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; padding: 8px 12px; background: rgba(12, 17, 29, .88); border: 1px solid rgba(76, 201, 240, .5); border-radius: 10px; font-size: 12.5px; color: var(--muted); }
+.answer-card b { color: var(--text); font-weight: 600; }
+.answer-card em { font-style: normal; font-family: var(--mono); color: #4cc9f0; }
+@media (max-width: 1250px) { .modes button { padding: 4px 8px; } }

@@ -114,7 +114,7 @@ const dyn = (it, shape, extra = {}) => ({
 });
 
 // ----- block -----
-const blockPts = (it) => toWorld(it, rectLocal(it.w, it.h));
+export const blockPts = (it) => toWorld(it, rectLocal(it.w, it.h));
 
 // "Align to slope": turn the block to match the nearest ramp slope or wall, and rest it on the open side
 function alignOnSurface(scene, it) {
@@ -350,7 +350,7 @@ const rampLocal = (it) => {
     ? [{ x: 0, y: 0 }, { x: it.base, y: 0 }, { x: it.base, y: h }]
     : [{ x: it.base, y: 0 }, { x: 0, y: 0 }, { x: 0, y: h }];
 };
-const rampPts = (it) => toWorld(it, rampLocal(it));
+export const rampPts = (it) => toWorld(it, rampLocal(it));
 registerItemType("ramp", {
   title: () => "Ramp",
   draw(g, it, selected) {
@@ -413,7 +413,7 @@ registerItemType("ramp", {
 });
 
 // ----- wall: a surface line with hatching on one side. Lay it flat to make a floor. -----
-const wallEnds = (it) => [{ x: it.x, y: it.y }, pointAt({ x: it.x, y: it.y }, it.length, it.rotation)];
+export const wallEnds = (it) => [{ x: it.x, y: it.y }, pointAt({ x: it.x, y: it.y }, it.length, it.rotation)];
 registerItemType("wall", {
   title: () => "Wall",
   draw(g, it, selected) {

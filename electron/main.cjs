@@ -1,11 +1,13 @@
-const { app, BrowserWindow, ipcMain, dialog } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, Menu } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const { autoUpdater } = require("electron-updater");
 
 // ---------- saving to disk ----------
 const workspaceFile = () => path.join(app.getPath("userData"), "workspace.json");
-const FILTERS = [{ name: "INCOG Mechanics project", extensions: ["incog"] }];
+// This app saves its own .incogmech files so they never clash with other apps that use .incog.
+// Old .incog files made by this app can still be opened.
+const FILTERS = [{ name: "INCOG Mechanics project", extensions: ["incogmech", "incog"] }];
 
 // Write to a temporary file first, then swap it in. If the computer dies half way through,
 // the old save is still there and untouched, never a half-written file.
@@ -15,7 +17,7 @@ function writeAtomic(file, text) {
   fs.renameSync(tmp, file);
 }
 
-const withExt = (file) => (/\.incog$/i.test(file) ? file : `${file}.incog`);
+const withExt = (file) => (/\.incogmech$/i.test(file) ? file : `${file.replace(/\.incog$/i, "")}.incogmech`);
 
 // The autosaved workspace (all open tabs)
 ipcMain.handle("workspace:load", () => {
@@ -48,7 +50,7 @@ ipcMain.handle("project:saveAs", async (event, suggestedName, text) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   const result = await dialog.showSaveDialog(win, {
     title: "Save project",
-    defaultPath: path.join(app.getPath("documents"), `${suggestedName || "Project"}.incog`),
+    defaultPath: path.join(app.getPath("documents"), `${suggestedName || "Project"}.incogmech`),
     filters: FILTERS,
   });
   if (result.canceled || !result.filePath) return { canceled: true };
@@ -63,7 +65,7 @@ ipcMain.handle("project:saveAs", async (event, suggestedName, text) => {
 
 // Save again to the file the project already has (Ctrl+S after the first save)
 ipcMain.handle("project:save", (_event, file, text) => {
-  if (typeof file !== "string" || !/\.incog$/i.test(file)) return { ok: false, error: "not a project file path." };
+  if (typeof file !== "string" || !/\.incog(mech)?$/i.test(file)) return { ok: false, error: "not a project file path." };
   try {
     writeAtomic(file, String(text));
     return { ok: true, path: file };
@@ -99,18 +101,18 @@ function createWindow() {
     minHeight: 640,
     title: "INCOG Mechanics",
     backgroundColor: "#0c111d",
-    autoHideMenuBar: true,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
       preload: path.join(__dirname, "preload.cjs"),
     },
   });
-    win.webContents.setVisualZoomLevelLimits(1, 1).catch(() => {}); // stops pinch-zoom from scaling the whole window
+  win.removeMenu(); // no File/Edit/View bar hidden at the top
+  win.webContents.setVisualZoomLevelLimits(1, 1).catch(() => {}); // stops pinch-zoom from scaling the whole window
   win.webContents.setWindowOpenHandler(() => ({ action: "deny" })); // the app never opens extra windows
 
   if (process.env.NODE_ENV === "development") {
-    win.loadURL("http://localhost:5173");
+    win.loadURL("http://127.0.0.1:5173");
   } else {
     win.loadFile(path.join(__dirname, "../dist/index.html"));
   }
@@ -159,6 +161,9 @@ if (!app.requestSingleInstanceLock()) {
       mainWindow.focus();
     }
   });
-  app.whenReady().then(() => setupUpdates(createWindow()));
+  app.whenReady().then(() => {
+    Menu.setApplicationMenu(null); // the app has its own ribbon, so the system menu is removed completely
+    setupUpdates(createWindow());
+  });
   app.on("window-all-closed", () => app.quit());
 }

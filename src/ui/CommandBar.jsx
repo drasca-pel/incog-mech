@@ -4,10 +4,10 @@ import { findTools } from "../tools/index.js";
 
 // Type a tool name to start it, like the AutoCAD command line.
 // Up/Down choose a suggestion, Enter runs it, Tab completes, Esc clears.
-export default function CommandBar({ message, onRun }) {
+export default function CommandBar({ message, onRun, tools }) {
   const [text, setText] = useState("");
   const [sel, setSel] = useState(0);
-  const matches = findTools(text).slice(0, 6);
+  const matches = findTools(text, tools).slice(0, 6);
 
   const run = (value) => {
     onRun(value);

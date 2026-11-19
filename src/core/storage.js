@@ -3,7 +3,7 @@
 //  1. Autosave: every open project is kept in one workspace file inside the app's own data
 //     folder. It is written a moment after each change and read back when the app starts,
 //     so closing the app never loses work.
-//  2. Save / Open: one project written to a .incog file you choose (Documents, a USB stick...).
+//  2. Save / Open: one project written to a .incog file you choose (Documents, a USB stick...), named .incogmech.
 //
 // In the desktop app the work is done by electron/main.cjs, reached through window.api
 // (see electron/preload.cjs). In a normal browser (npm run dev) autosave uses localStorage instead.
@@ -21,6 +21,7 @@ export const hasDesktop = () => typeof window !== "undefined" && Boolean(window.
 // What is written to disk. Undo history and the running simulation are not saved.
 export const projectToData = (p) => ({
   name: p.name,
+  topic: p.topic,
   view: p.view,
   gravity: p.gravity,
   env: p.env,
@@ -41,6 +42,7 @@ export function projectFromData(d, number = 1) {
   const maxId = items.reduce((m, i) => Math.max(m, Number(i.id) || 0), 0);
   return {
     ...base,
+    topic: typeof d.topic === "string" ? d.topic : "sandbox",
     name: typeof d.name === "string" && d.name.trim() ? d.name : base.name,
     view: { ...DEFAULT_VIEW, ...d.view },
     gravity: typeof d.gravity === "number" ? d.gravity : 9.81,
@@ -62,7 +64,8 @@ export function projectFromFileText(text, number) {
   } catch {
     throw new Error("this file is damaged or is not an INCOG Mechanics project.");
   }
-  return projectFromData(raw && raw.project ? raw.project : raw, number);
+  if (!raw || raw.app !== "incog-mech") throw new Error("this file was not made by INCOG Mechanics (it may belong to another app).");
+  return projectFromData(raw.project, number);
 }
 
 // ----- the whole workspace (all tabs) -----
