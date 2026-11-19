@@ -279,7 +279,10 @@ export default function App() {
     try {
       const res = existingPath && !askWhere
         ? await window.api.saveProject(existingPath, json)
-        : await window.api.saveProjectAs("INCOG-Mechanics-Workspace", json);
+       : await window.api.saveProjectAs(
+    `INCOG-${active?.name || "Workspace"}`,
+    json
+  );
       if (res.canceled) return;
       if (!res.ok) throw new Error(res.error);
       setState((s) => ({ ...s, projects: s.projects.map((p) => ({ ...p, filePath: res.path })) }));
@@ -300,7 +303,13 @@ export default function App() {
       if (!res.ok) throw new Error(res.error);
       const restored = workspaceFromFileText(res.content);
       const projects = restored.projects.map((p) => ({ ...p, filePath: res.path }));
-      counter.current += projects.length;
+      counter.current = projects.reduce(
+  (max, p) => {
+    const match = /^Project (\d+)$/.exec(p.name);
+    return Math.max(max, match ? Number(match[1]) : 0);
+  },
+  counter.current
+);
       resetSim();
       setState({ projects, activeId: restored.activeId });
       setSelectedId(null);
