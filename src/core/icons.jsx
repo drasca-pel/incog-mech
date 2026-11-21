@@ -168,6 +168,13 @@ const ICONS = {
   save: <path d="M5 4h11l3 3v13H5zM8 4v5h7V4M8 20v-6h8v6" />,
   saveAs: <path d="M5 4h10l3 3v5M5 4v16h7M8 4v5h6V4M18 15v6M15 18h6" />,
   open: <path d="M3 7a1 1 0 0 1 1-1h5l2 2h8a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z" />,
+  menu: <path d="M4 7h16M4 12h16M4 17h16" />,
+  close: <path d="M6 6l12 12M18 6L6 18" />,
+  toolbox: (<><rect x="4" y="4" width="7" height="7" rx="1.5" /><rect x="13" y="4" width="7" height="7" rx="1.5" /><rect x="4" y="13" width="7" height="7" rx="1.5" /><path d="M16.5 13v7M13 16.5h7" /></>),
+  sliders: <path d="M4 7h9M17 7h3M4 17h3M11 17h9M15 4v6M9 14v6" />,
+  folder: <path d="M3 7a1 1 0 0 1 1-1h5l2 2h8a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z" />,
+  download: <path d="M12 4v11M7 11l5 5 5-5M5 20h14" />,
+  topic: <path d="M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5M3 17l9 5 9-5" />,
   measure: <path d="M4 17L17 4l3 3L7 20zM8 13l2 2M11 10l2 2M14 7l2 2" />,
 };
 

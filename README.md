@@ -1,49 +1,53 @@
 # INCOG Mechanics
 
-An offline 2D physics simulator for mechanics problems. Draw blocks, balls, ramps, ropes, springs and forces, press Play, and read the live values.
+Build a mechanics problem on a canvas, press Play, and read the answers with the working.
+Topics: Sandbox, Projectile, Forces and friction, Collisions, Statics, Energy.
+Works on a phone (portrait and landscape), on a tablet, on a computer, and offline.
 
-## One workspace, several topics
+## Run it on your computer
 
-There is one big drawing area. The topic buttons in the title bar (Sandbox, Projectile, Forces and friction, Collisions, Statics, Energy) change the environment and add that topic's own tools in the ribbon. Your drawing stays.
+    npm install
+    npm run electron:dev     # desktop window with live reload
+    npm run dev              # in the browser (try it with the phone layout too)
+    npm start                # build, then open the built desktop app
+    npm test                 # checks the calculators and the saved-projects library
 
-- **Projectile**: open sky, ground at y = 0. Launch ball / block: click the start, click the aim (arrow length = speed, 1 m = 1 m/s). Drag the arrow tip later to change it. Target and Platform.
-- **Forces and friction**: Block on slope, Pushed block.
-- **Collisions**: air track (gravity 0, no friction). Carts, sticky carts and pucks, moving or at rest.
-- **Statics**: Hanging weight, Beam on supports, plus ropes, rods, supports and forces.
-- **Energy**: Pendulum, Spring and mass.
+## The phone app (install it from a web address)
 
-The **Answers** panel (top right) is worked out from what you drew, not typed in: range, tensions, accelerations, reactions, periods and so on, with "now" rows that move live while it plays. The predicted flight path is drawn dashed on the canvas before you press Play.
+The app is also a website that can be installed like an app (a PWA).
 
-## Run it while developing
+One-time setup, so GitHub hosts it for you:
+1. Push this project to GitHub (the `main` branch).
+2. In the repository open **Settings > Pages**, and under "Build and deployment" set **Source: GitHub Actions**.
+3. Open the **Actions** tab. The "Publish web app" workflow runs by itself on every push. When it finishes, your address is
+   `https://<your-github-name>.github.io/incog-mech/`
 
-```
-npm install
-npm run electron:dev     # desktop window with live reload
-npm run dev              # plain browser (file Save/Open need the desktop app)
-```
+On the phone:
+- **Android (Chrome):** open the address, then Menu (three dots) > **Install app**, or use **Install the app** inside INCOG's own menu.
+- **iPhone / iPad (Safari):** open the address, tap **Share**, then **Add to Home Screen**.
 
-## Test the built app on your computer
+After the first visit it opens with no internet. The icon is a pendulum on a ceiling mount.
 
-```
-npm start                # builds, then opens the desktop app from dist/
-npm run dist             # makes the Windows installer in the release/ folder
-```
+To try the phone layout on your own computer: press F12 in the browser, turn on the phone/tablet toggle, and reload.
+
+## Screens
+
+The app picks the layout by itself: the phone layout on a phone, the desktop layout on a computer.
+**Menu > View, gravity and screen layout** lets you force Phone or Desktop. Both rotate to portrait or landscape.
+
+Phone: top bar (menu, project name, undo, redo, reset, play), the drawing full screen, a tool strip and bottom buttons
+(Tools, Properties, Answers, Topic, View). Pinch to zoom, drag the empty background to move around, tap an object to edit or delete it.
 
 ## Saving
 
-- **Autosave:** every open tab is saved automatically and comes back when you reopen the app.
-- **Save / Save as / Open** (Ctrl+S, Ctrl+Shift+S, Ctrl+O): one project to a `.incogmech` file you choose.
+- Everything autosaves and comes back when you reopen the app.
+- **Menu > My projects** keeps named projects on the device, like the project list of a circuit simulator.
+  A saved project holds the drawing of EVERY topic, so friction, collisions and the rest come back together.
+  You can open, rename, copy, share (as a `.incog` file) and delete them, and import a shared file.
+- Desktop app only: Ctrl+S / Ctrl+O also save and open `.incog` files.
 
-## Publishing a new version (installer + automatic updates)
+## Publishing a desktop installer (Windows)
 
-1. Put your GitHub username in `package.json` under `build.publish.owner`.
-2. Change `version` in `package.json` (for example `1.0.1`), then commit and push.
-3. Tag and push the tag:
-   ```
-   git tag v1.0.1
-   git push origin v1.0.1
-   ```
-4. GitHub builds the installer (Actions tab, about 5 minutes) and creates a **draft** release.
-5. Open the repo's **Releases** page, check the draft, and click **Publish release**.
+    npm run dist             # builds the installer into the release folder
 
-People who installed the app get the new version the next time they open it. The release must be on a **public** repository for the updater to find it without a token.
+or use the "Release" workflow on GitHub (Actions > Release) to publish it with automatic updates.

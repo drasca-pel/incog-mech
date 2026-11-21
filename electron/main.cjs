@@ -100,6 +100,7 @@ function createWindow() {
     minWidth: 1000,
     minHeight: 640,
     title: "INCOG Mechanics",
+    icon: path.join(__dirname, "../build/icon.png"),
     backgroundColor: "#0c111d",
     webPreferences: {
       contextIsolation: true,

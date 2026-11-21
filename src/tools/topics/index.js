@@ -51,6 +51,8 @@ const groundY = (ctx, fallback) => (ctx && ctx.env && ctx.env.ground && ctx.env.
 const block = (x, y, over = {}) => ({ type: "block", x, y, w: 1.2, h: 0.8, mass: 5, friction: 0.4, rotation: 0, label: "", ...over });
 const rope = (a, b, label = "") => ({ type: "line", style: "rope", pattern: "solid", a, b, label });
 const support = (kind, p) => ({ type: "support", kind, x: p.x, y: p.y, label: "" });
+// A wall to mount things on: from (x, y), length metres at rotation degrees. The hatching is on its "left" or "right" side.
+const mount = (x, y, length, rotation, side) => ({ type: "wall", x, y, length, rotation, side, friction: 0.4, label: "" });
 
 const tool = (id, name, topic, group, behavior, prompt) => ({
   id, name, icon: id, tab: "Topic", topic, group, kind: "tool", ready: true, prompt, behavior,
@@ -92,8 +94,8 @@ export const topicTools = [
     ["cart", "Cart", 1, "Elastic"],
     ["sticky", "Sticky cart", 0, "Inelastic"],
   ].flatMap(([id, name, e, group]) => [
-    aim(id, name, "collisions", group, (a, b) => block(a.x, a.y, { w: 1.2, h: 0.7, mass: 2, bounce: e, friction: 0, ...launch(a, b) }), `${name}: ${AIM}`),
-    place(`${id}Rest`, `${name} at rest`, "collisions", group, (p) => block(p.x, p.y, { w: 1.2, h: 0.7, mass: 2, bounce: e, friction: 0 }), `${name} at rest: click to place.`),
+    aim(id, name, "collisions", group, (a, b) => block(a.x, a.y, { w: 1.2, h: 0.7, mass: 2, bounce: e, friction: 0, lockRotation: true, ...launch(a, b) }), `${name}: ${AIM}`),
+    place(`${id}Rest`, `${name} at rest`, "collisions", group, (p) => block(p.x, p.y, { w: 1.2, h: 0.7, mass: 2, bounce: e, friction: 0, lockRotation: true }), `${name} at rest: click to place.`),
   ]),
   aim("puck", "Puck", "collisions", "Pucks", (a, b) => ({ type: "ball", x: a.x, y: a.y, radius: 0.35, mass: 1, friction: 0, bounce: 1, label: "", ...launch(a, b) }), `Puck: ${AIM}`),
   place("puckRest", "Puck at rest", "collisions", "Pucks", (p) => ({ type: "ball", x: p.x, y: p.y, radius: 0.35, mass: 1, friction: 0, bounce: 1, label: "" }), "Puck at rest: click to place."),
@@ -102,8 +104,14 @@ export const topicTools = [
   place("hanging", "Hanging weight", "statics", "Set-ups", (p) => {
     const A = { x: p.x - 3, y: p.y + 2 };
     const B = { x: p.x + 2.5, y: p.y + 3 };
-    return [support("anchor", A), support("anchor", B), block(p.x, p.y, { mass: 10, label: "W" }), rope(A, { x: p.x, y: p.y }, "T1"), rope(B, { x: p.x, y: p.y }, "T2")];
-  }, "Hanging weight: click where the weight hangs. Move the anchors or change the mass and the tensions update."),
+    return [
+      mount(A.x, A.y - 1.4, 2.8, 90, "left"), // left wall, hatched on its outer side
+      mount(B.x, B.y - 1.4, 2.8, 90, "right"), // right wall
+      support("anchor", A), support("anchor", B),
+      block(p.x, p.y, { mass: 10, label: "W", lockRotation: true }),
+      rope(A, { x: p.x, y: p.y }, "T1"), rope(B, { x: p.x, y: p.y }, "T2"),
+    ];
+  }, "Hanging weight: click where the weight hangs. It hangs from two walls. Move the anchors or change the mass and the tensions update."),
   place("beamSupports", "Beam on supports", "statics", "Set-ups", (p) => {
     const L = 3;
     return [
@@ -119,11 +127,11 @@ export const topicTools = [
     const L = 3;
     const th = (40 * Math.PI) / 180;
     const bob = { x: p.x + L * Math.sin(th), y: p.y - L * Math.cos(th) };
-    return [support("anchor", p), { type: "bob", x: bob.x, y: bob.y, radius: 0.3, mass: 2, friction: 0.4, label: "", bounce: 0 }, rope({ x: p.x, y: p.y }, bob)];
-  }, "Pendulum: click the pivot. Drag the bob to change the release angle."),
+    return [mount(p.x - 1.2, p.y, 2.4, 0, "left"), support("anchor", p), { type: "bob", x: bob.x, y: bob.y, radius: 0.3, mass: 2, friction: 0.4, label: "", bounce: 0 }, rope({ x: p.x, y: p.y }, bob)];
+  }, "Pendulum: click the pivot. It hangs from a ceiling bar. Drag the bob to change the release angle."),
   place("springMass", "Spring and mass", "energy", "Set-ups", (p) => {
     const c = { x: p.x, y: p.y - 2.5 };
-    return [support("anchor", p), block(c.x, c.y, { w: 0.8, h: 0.6, mass: 2 }), { type: "line", style: "spring", pattern: "solid", a: { x: p.x, y: p.y }, b: c, label: "", k: 80, rest: 1.5, zeta: 0 }];
+    return [mount(p.x - 1.2, p.y, 2.4, 0, "left"), support("anchor", p), block(c.x, c.y, { w: 0.8, h: 0.6, mass: 2, lockRotation: true }), { type: "line", style: "spring", pattern: "solid", a: { x: p.x, y: p.y }, b: c, label: "", k: 80, rest: 1.5, zeta: 0 }];
   }, "Spring and mass: click the top. The spring starts stretched and bounces without damping."),
 ];
 

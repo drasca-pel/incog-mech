@@ -47,6 +47,10 @@ function bodyProps(it, def) {
       id: "hookCentre", label: "Pull from centre", kind: "choice", options: YES_NO,
       value: hookCentre(it, def) ? "yes" : "no", set: (i, v) => ({ ...i, hookCentre: v === "yes" }),
     });
+    out.push({
+      id: "lockRotation", label: "Keep upright (no spinning)", kind: "choice", options: YES_NO,
+      value: it.lockRotation ? "yes" : "no", set: (i, v) => ({ ...i, lockRotation: v === "yes" }),
+    });
   }
   return out;
 }

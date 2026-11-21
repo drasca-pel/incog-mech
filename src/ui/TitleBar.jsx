@@ -1,13 +1,19 @@
 import { useState } from "react";
 import { TOPICS } from "../core/topics.js";
+import Icon from "../core/icons.jsx";
 
 // Brand and project tabs, like drawing tabs in AutoCAD.
 // Double-click a tab to rename it.
-export default function TitleBar({ projects, activeId, onSelect, onAdd, onClose, onRename, topic = "sandbox", onTopic }) {
+export default function TitleBar({ projects, activeId, onSelect, onAdd, onClose, onRename, topic = "sandbox", onTopic, onMenu }) {
   const [editing, setEditing] = useState(null);
 
   return (
     <header className="titlebar">
+      {onMenu && (
+        <button className="menu-btn" onClick={onMenu} aria-label="Menu" title="Menu: my projects, settings, install">
+          <Icon name="menu" size={20} />
+        </button>
+      )}
       <div className="brand">
         INCOG<span>Mechanics</span>
       </div>

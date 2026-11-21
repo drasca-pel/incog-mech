@@ -28,6 +28,7 @@ export const projectToData = (p) => ({
   viewed: p.viewed,
   scene: p.scene,
   workspaces: p.workspaces || {},
+  libraryId: p.libraryId || null,
 });
 
 // Turn data read from disk back into a full project. Anything missing gets its default,
@@ -52,6 +53,7 @@ export function projectFromData(d, number = 1) {
     scene: { items, nextId: Math.max(Number(d.scene.nextId) || 1, maxId + 1) },
     workspaces: d.workspaces && typeof d.workspaces === "object" ? d.workspaces : {},
     filePath: typeof d.filePath === "string" ? d.filePath : null,
+    libraryId: typeof d.libraryId === "string" ? d.libraryId : null,
   };
 }
 

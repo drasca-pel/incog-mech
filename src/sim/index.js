@@ -15,6 +15,7 @@
 //   roller    holds an object at a point against up/down movement only
 // Line ends that meet each other with no object between them become a small junction (a knot).
 import { World, Vec2, Box, Circle, Polygon, Edge, RopeJoint, DistanceJoint, RevoluteJoint } from "planck";
+import * as Planck from "planck";
 import { itemType } from "../core/itemTypes.js";
 import { dist } from "../core/geometry.js";
 import { worldOfLocal } from "../core/joins.js";
@@ -56,8 +57,21 @@ const ROOM = 0x0002;
 
 const CONNECTORS = new Set(["rope", "rod", "spring"]);
 
+// The physics engine ignores bounces slower than 1 m/s, so slow collisions went dead. Lower that limit
+// (a little for things under gravity, which would otherwise jitter, and almost to zero when there is no gravity).
+function setBounceThreshold(v) {
+  try {
+    const key = "Settings";
+    const S = Planck[key];
+    if (S && typeof S === "object") S.velocityThreshold = v;
+  } catch {
+    // the default limit is fine
+  }
+}
+
 export function createSim(scene, gravity, envIn) {
   const env = envIn || newEnv();
+  setBounceThreshold(gravity > 0 ? 0.25 : 0.02);
   const world = new World({ gravity: new Vec2(0, -gravity) });
   const ground = world.createBody();
   const recs = new Map(); // item id -> { body, item, kind, torque, trail, maxY, x0, y0 }
@@ -73,8 +87,8 @@ export function createSim(scene, gravity, envIn) {
     ground.createFixture({ shape: new Edge(new Vec2(a.x, a.y), new Vec2(b.x, b.y)), friction: frictionless ? 0 : friction, restitution, filterCategoryBits: ROOM });
   if (env.ground.on) edge({ x: -BIG, y: env.ground.y }, { x: BIG, y: env.ground.y }, env.ground.friction, env.ground.bounce);
   if (env.ceiling.on) edge({ x: -BIG, y: env.ceiling.y }, { x: BIG, y: env.ceiling.y }, 0.3, env.ceiling.bounce);
-  if (env.left.on) edge({ x: env.left.x, y: -BIG }, { x: env.left.x, y: BIG }, 0.3, 0.2);
-  if (env.right.on) edge({ x: env.right.x, y: -BIG }, { x: env.right.x, y: BIG }, 0.3, 0.2);
+  if (env.left.on) edge({ x: env.left.x, y: -BIG }, { x: env.left.x, y: BIG }, 0.3, env.left.bounce ?? 0.2);
+  if (env.right.on) edge({ x: env.right.x, y: -BIG }, { x: env.right.x, y: BIG }, 0.3, env.right.bounce ?? 0.2);
 
   // ----- bodies -----
   for (const it of scene.items) {
@@ -86,6 +100,7 @@ export function createSim(scene, gravity, envIn) {
       position: new Vec2(ph.x, ph.y),
       angle: ph.angle || 0,
       angularVelocity: ph.spin || 0,
+      fixedRotation: ph.kind === "dynamic" && Boolean(it.lockRotation), // carts and pucks stay upright
     });
     body.createFixture({
       shape: planckShape(ph.shape),

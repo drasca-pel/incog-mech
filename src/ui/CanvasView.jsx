@@ -179,9 +179,13 @@ export default function CanvasView({
   const onPointerDown = (e) => {
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointers.current.size === 2) {
+      if (dragRef.current && dragRef.current.kind === "aim") setDraft(null);
+      dragRef.current = null;
       startPinch();
       return;
     }
+    const touch = e.pointerType === "touch" || e.pointerType === "pen";
+    const K = touch ? 2.6 : 1; // a finger is less exact than a mouse: pick things from further away
     if (e.button === 2) {
       setDraft(null);
       setTyping(null);
@@ -200,6 +204,10 @@ export default function CanvasView({
       const { p } = snapPoint(raw);
       if (!draft) {
         setDraft({ a: p });
+        if (touch) {
+          dragRef.current = { kind: "aim", x: e.clientX, y: e.clientY };
+          e.currentTarget.setPointerCapture(e.pointerId);
+        }
         return;
       }
       const b = e.shiftKey ? constrainAngle(draft.a, p) : p;
@@ -217,10 +225,10 @@ export default function CanvasView({
     if (tool.id === "select") {
       const sel = typeof selectedId === "number" ? scene.items.find((i) => i.id === selectedId) : null;
       if (sel && !readOnly) {
-        const h = itemType(sel.type).handles(sel).find((hd) => dist(hd.p, raw) <= 10 / view.scale);
+        const h = itemType(sel.type).handles(sel).find((hd) => dist(hd.p, raw) <= (10 * K) / view.scale);
         if (h) {
           // A click (no drag) on a handle that sits on another object picks that object instead
-          const under = [...scene.items].reverse().find((i) => i.id !== sel.id && itemType(i.type).hitTest(i, raw, 8 / view.scale));
+          const under = [...scene.items].reverse().find((i) => i.id !== sel.id && itemType(i.type).hitTest(i, raw, (8 * K) / view.scale));
           dragRef.current = { kind: "handle", id: sel.id, handle: h.id, began: false, under: under ? under.id : null };
           e.currentTarget.setPointerCapture(e.pointerId);
           return;
@@ -232,10 +240,10 @@ export default function CanvasView({
         onSelect(ang.key);
         return;
       }
-      const tol = 8 / view.scale;
+      const tol = (8 * K) / view.scale;
       // Everything under the pointer, topmost first. A line that ends right here goes last, so the
       // object it is tied to can be picked. Alt + click picks the next thing underneath.
-      const endTol = 10 / view.scale;
+      const endTol = (10 * K) / view.scale;
       const hits = [...scene.items]
         .reverse()
         .filter((i) => itemType(i.type).hitTest(i, raw, tol))
@@ -254,6 +262,10 @@ export default function CanvasView({
         }
       } else {
         onSelect(null);
+        if (touch) {
+          dragRef.current = { kind: "pan", x: e.clientX, y: e.clientY, vx: view.x, vy: view.y };
+          e.currentTarget.setPointerCapture(e.pointerId);
+        }
       }
     }
   };
@@ -312,6 +324,13 @@ export default function CanvasView({
   const onPointerUp = (e) => {
     const d = dragRef.current;
     if (d && d.kind === "handle" && !d.began && d.under != null) onSelect(d.under);
+    if (d && d.kind === "aim" && draft && Math.hypot(e.clientX - d.x, e.clientY - d.y) > 16) {
+      // finger dragged out and lifted: that is the second point
+      const { p } = snapPoint(worldOf(e));
+      if (dist(draft.a, p) > 0.0005) onAddItem(tool.behavior.create(draft.a, p, { env }));
+      setDraft(null);
+      setTyping(null);
+    }
     pointers.current.delete(e.pointerId);
     if (pointers.current.size < 2) pinch.current = null;
     dragRef.current = null;

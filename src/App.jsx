@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import "./shell.css";
 import { TOOLS, findTools, toolsForTopic } from "./tools/index.js";
-import { applyTopic, topicById } from "./core/topics.js";
+import { applyTopic, topicById, TOPICS } from "./core/topics.js";
 import { analyze } from "./analysis/index.js";
 import { itemType } from "./core/itemTypes.js";
 import { addItem, updateItem, removeItem } from "./core/scene.js";
@@ -24,6 +24,17 @@ import CommandBar from "./ui/CommandBar.jsx";
 import StatusBar from "./ui/StatusBar.jsx";
 import StartPage from "./ui/StartPage.jsx";
 import EnvPanel from "./ui/EnvPanel.jsx";
+import { useLayout } from "./mobile/useLayout.js";
+import MobileShell from "./mobile/MobileShell.jsx";
+import Sheet from "./mobile/Sheet.jsx";
+import MenuDrawer from "./mobile/MenuDrawer.jsx";
+import ProjectsSheet from "./mobile/ProjectsSheet.jsx";
+import TopicsList from "./mobile/TopicsList.jsx";
+import SettingsPanel from "./mobile/SettingsPanel.jsx";
+import { useInstall } from "./pwa/pwa.js";
+import { listProjects, saveToLibrary, loadFromLibrary, deleteFromLibrary, renameInLibrary, duplicateInLibrary, exportText, importText, libraryAvailable } from "./core/library.js";
+import { shareOrDownload, safeFileName, pickTextFile } from "./core/files.js";
+import "./mobile/mobile.css";
 
 // The shell: it arranges the screen and passes events around.
 // It knows nothing about specific tools. They come from tools/index.js.
@@ -57,6 +68,10 @@ export default function App() {
   const [rightTab, setRightTab] = useState("props"); // props | results
   const [envOpen, setEnvOpen] = useState(false);
   const [message, setMessage] = useState("Ready. Pick a tool from the ribbon, or type a command.");
+  const layout = useLayout(); // phone or desktop screen, portrait or landscape
+  const install = useInstall(); // can the app be added to the home screen?
+  const [sheet, setSheet] = useState(null); // which slide-in panel is open: menu, projects, topics, settings, props, answers, toolbox, help
+  const [lib, setLib] = useState(() => listProjects()); // the saved projects on this device
 
   stateRef.current = state;
   const active = state.projects.find((p) => p.id === state.activeId) || null;
@@ -91,7 +106,7 @@ export default function App() {
 
   const selectItem = (id) => {
     setSelectedId(id);
-    if (id != null && !propsOpen) {
+    if (id != null && !propsOpen && layout.mode !== "phone") {
       setRightTab("props");
       setPropsOpen(true);
     }
@@ -268,9 +283,9 @@ export default function App() {
   const saveProject = async (askWhere) => {
     if (!stateRef.current.projects.length) return;
     if (!hasDesktop()) {
-      // Browser mode persists the complete workspace automatically.
+      // Browser and phone: everything is kept automatically, and this also makes a named copy in My projects.
       await saveWorkspace(workspaceToJson(stateRef.current.projects, stateRef.current.activeId, {}));
-      setMessage("All projects and topic workspaces saved in this browser.");
+      saveActiveToLibrary();
       return;
     }
     const current = stateRef.current;
@@ -294,7 +309,7 @@ export default function App() {
 
   const openProject = async () => {
     if (!hasDesktop()) {
-      setMessage("Opening files works in the desktop app. In this browser your work is kept automatically.");
+      setSheet("projects");
       return;
     }
     try {
@@ -320,6 +335,97 @@ export default function App() {
   };
 
   // ----- tools and actions -----
+  // ----- My projects (saved on this device) -----
+  const refreshLib = () => setLib(listProjects());
+  const makeThumb = () => {
+    try {
+      const src = document.querySelector(".canvas-wrap canvas");
+      if (!src || !src.width) return null;
+      const w = 240;
+      const h = Math.max(1, Math.round((src.height / src.width) * w));
+      const c = document.createElement("canvas");
+      c.width = w;
+      c.height = h;
+      c.getContext("2d").drawImage(src, 0, 0, w, h);
+      return c.toDataURL("image/jpeg", 0.6);
+    } catch {
+      return null;
+    }
+  };
+  const saveActiveToLibrary = () => {
+    const cur = stateRef.current.projects.find((p) => p.id === stateRef.current.activeId);
+    if (!cur) return;
+    try {
+      const entry = saveToLibrary(cur, { thumb: makeThumb() });
+      const id = cur.id;
+      setState((st) => ({ ...st, projects: st.projects.map((p) => (p.id === id ? { ...p, libraryId: entry.id } : p)) }));
+      refreshLib();
+      setMessage(`Saved "${cur.name}" to My projects.`);
+    } catch (err) {
+      setMessage(err.message);
+    }
+  };
+  const openFromLibrary = (id) => {
+    const already = stateRef.current.projects.find((p) => p.libraryId === id);
+    if (already) {
+      resetSim();
+      setState((st) => ({ ...st, activeId: already.id }));
+      setSelectedId(null);
+      setSheet(null);
+      setMessage(`"${already.name}" is already open.`);
+      return;
+    }
+    try {
+      counter.current += 1;
+      const p = loadFromLibrary(id, counter.current);
+      resetSim();
+      setState((st) => ({ projects: [...st.projects, p], activeId: p.id }));
+      setSelectedId(null);
+      setSheet(null);
+      setMessage(`Opened "${p.name}".`);
+    } catch (err) {
+      setMessage(err.message);
+    }
+  };
+  const renameSaved = (id, name) => {
+    renameInLibrary(id, name);
+    const n = String(name || "").trim();
+    if (n) setState((st) => ({ ...st, projects: st.projects.map((p) => (p.libraryId === id ? { ...p, name: n } : p)) }));
+    refreshLib();
+  };
+  const duplicateSaved = (id) => {
+    try {
+      duplicateInLibrary(id);
+      refreshLib();
+    } catch (err) {
+      setMessage(err.message);
+    }
+  };
+  const deleteSaved = (id) => {
+    deleteFromLibrary(id);
+    setState((st) => ({ ...st, projects: st.projects.map((p) => (p.libraryId === id ? { ...p, libraryId: null } : p)) }));
+    refreshLib();
+  };
+  const shareSaved = async (id) => {
+    const e = lib.find((x) => x.id === id);
+    try {
+      await shareOrDownload(`${safeFileName(e ? e.name : "project")}.incog`, exportText(id));
+    } catch (err) {
+      setMessage(err.message);
+    }
+  };
+  const importSaved = async () => {
+    const f = await pickTextFile();
+    if (!f) return;
+    try {
+      const entry = importText(f.text);
+      refreshLib();
+      setMessage(`Imported "${entry.name}".`);
+    } catch (err) {
+      setMessage(`Could not import: ${err.message}`);
+    }
+  };
+
   const runAction = (id) => {
     if (id === "grid") setGrid((g) => !g);
     else if (id === "axes") setAxes((a) => !a);
@@ -489,6 +595,201 @@ export default function App() {
 
   if (!ready) return <div className="app" />;
 
+  // ----- the pieces shared by the phone and desktop layouts -----
+  const phone = layout.mode === "phone";
+  const topicLabel = (id) => (TOPICS.find((t) => t.id === id) || { name: id }).name;
+  const goSheet = (name) => {
+    if (name === "answers") setRightTab("answers");
+    if (name === "props") setRightTab("props");
+    setSheet(name);
+  };
+  const closeSheet = () => setSheet(null);
+  const canvasNode = active ? (
+        <CanvasView
+          key={active.id}
+          view={active.view}
+          grid={grid}
+          axes={axes}
+          snap={snap}
+          tool={tool}
+          env={simStatus !== "idle" && simEnvRef.current ? simEnvRef.current : active.env}
+          pins={pins}
+          scene={shownScene}
+          selectedId={selectedItem ? selectedItem.id : null}
+          onView={(view) => updateActive((p) => ({ ...p, view }))}
+          onSize={(s) => {
+            sizeRef.current = s;
+          }}
+          onCursor={setCursor}
+          onSelect={selectItem}
+          overlay={answers}
+          onAddItem={addItemToScene}
+          onBeginEdit={beginEdit}
+          onLiveEdit={(id, fn) => liveEdit((s) => updateItem(s, id, fn), id)}
+          onFinish={() => {
+            setActiveTool("select");
+            setMessage("Select: click an object to see its properties.");
+          }}
+        />
+  ) : (
+    <StartPage onNew={addProject} />
+  );
+  const panelNode = (
+    <Properties
+      key={selectedItem ? selectedItem.id : "none"}
+      open
+      onToggle={closeSheet}
+      item={selectedItem}
+      onBeginEdit={beginEdit}
+      onEdit={editProperty}
+      tab={rightTab}
+      onTab={setRightTab}
+      rows={rows}
+      viewed={active ? active.viewed : []}
+      onToggleView={toggleView}
+      answers={answers}
+    />
+  );
+  const envNode = active ? <EnvPanel env={active.env} onChange={changeEnv} onClose={closeSheet} /> : null;
+  const settingsNode = active ? (
+    <SettingsPanel
+      grid={grid}
+      axes={axes}
+      snap={snap}
+      onToggle={(id) => runAction(id)}
+      gravity={active.gravity}
+      onGravity={(g) => updateActive((p) => ({ ...p, gravity: g }))}
+      onZoomFit={() => runAction("zoomFit")}
+      layoutOverride={layout.override}
+      onLayout={layout.setOverride}
+    />
+  ) : null;
+  const topicsNode = (
+    <TopicsList
+      topics={TOPICS}
+      current={topic}
+      onPick={(id) => {
+        if (active) switchTopic(id);
+        closeSheet();
+      }}
+    />
+  );
+  const projectsNode = (
+    <ProjectsSheet
+      entries={lib}
+      currentId={active ? active.libraryId : null}
+      available={libraryAvailable()}
+      topicName={topicLabel}
+      onSaveCurrent={saveActiveToLibrary}
+      onOpen={openFromLibrary}
+      onRename={renameSaved}
+      onDuplicate={duplicateSaved}
+      onExport={shareSaved}
+      onDelete={deleteSaved}
+      onImport={importSaved}
+    />
+  );
+  const menuNode = (
+    <MenuDrawer
+      onNew={() => {
+        addProject();
+        closeSheet();
+      }}
+      onProjects={() => setSheet("projects")}
+      onSaveToLibrary={() => {
+        saveActiveToLibrary();
+        closeSheet();
+      }}
+      onTopics={() => setSheet("topics")}
+      onSettings={() => setSheet("settings")}
+      onEnvironment={() => {
+        if (phone) setSheet("settings");
+        else {
+          setEnvOpen(true);
+          closeSheet();
+        }
+      }}
+      desktopFiles={hasDesktop()}
+      onSaveFile={() => {
+        closeSheet();
+        saveProject(false);
+      }}
+      onOpenFile={() => {
+        closeSheet();
+        openProject();
+      }}
+      install={install}
+      onHelp={() => setSheet("help")}
+    />
+  );
+  const helpNode = (
+    <div className="m-help">
+      <ol>
+        <li><b>Pick a topic</b> (Topic): projectile, forces, collisions, statics or energy. Each keeps its own drawing.</li>
+        <li><b>Tap a tool</b> in the strip, then tap or drag on the drawing to place it.</li>
+        <li><b>Tap an object</b> to select it, then Edit to change its numbers.</li>
+        <li><b>Press the yellow Play button.</b> The answers appear under Answers, with the working.</li>
+        <li><b>Pinch to zoom</b> and drag the empty background to move around.</li>
+        <li><b>Menu, Save this project</b> keeps it on this device in My projects.</li>
+      </ol>
+    </div>
+  );
+  const itemName = selectedItem ? selectedItem.label || ((itemType(selectedItem.type) || {}).title ? itemType(selectedItem.type).title(selectedItem) : "Selected") : "";
+  const selBar = selectedItem ? (
+    <div className="m-selbar">
+      <strong>{itemName}</strong>
+      <button onClick={() => goSheet("props")}>Edit</button>
+      <button className="danger" onClick={() => runAction("delete")}>Delete</button>
+    </div>
+  ) : null;
+  const answerChips = headline.some((h) => h.chips.length) ? (
+    <div className="m-chips-strip">
+      {headline.flatMap((h) =>
+        h.chips.map((c) => (
+          <button key={h.id + c.label} className="m-answer" onClick={() => goSheet("answers")}>
+            <span>{c.label}</span>
+            <b>{Math.round(c.value * 100) / 100} {c.unit}</b>
+          </button>
+        ))
+      )}
+    </div>
+  ) : null;
+
+  if (phone) {
+    return (
+      <MobileShell
+        landscape={layout.landscape}
+        projectName={active ? active.name : "No project"}
+        topicName={topicLabel(topic)}
+        simStatus={simStatus}
+        simTime={simTime}
+        message={message.startsWith("Ready.") ? "Tap a tool below, then tap or drag on the drawing." : message}
+        canUndo={Boolean(active && active.past && active.past.length)}
+        canRedo={Boolean(active && active.future && active.future.length)}
+        onUndo={() => runAction("undo")}
+        onRedo={() => runAction("redo")}
+        onPlay={() => runAction("play")}
+        onPause={() => runAction("pause")}
+        onReset={() => runAction("reset")}
+        tools={tools.filter((t) => t.ready)}
+        activeTool={activeTool}
+        onActivate={activate}
+        canvas={canvasNode}
+        answerChips={answerChips}
+        selBar={selBar}
+        sheet={sheet}
+        onSheet={goSheet}
+        panelNode={panelNode}
+        envNode={envNode}
+        topicsNode={topicsNode}
+        projectsNode={projectsNode}
+        menuNode={menuNode}
+        settingsNode={settingsNode}
+        helpNode={helpNode}
+      />
+    );
+  }
+
   return (
     <div className="app">
       <TitleBar
@@ -504,42 +805,14 @@ export default function App() {
         onRename={renameProject}
         topic={topic}
         onTopic={active ? switchTopic : undefined}
+        onMenu={() => setSheet("menu")}
       />
 
       <Ribbon tools={tools.filter((t) => t.ready)} activeTool={activeTool} toggles={{ grid, axes, snap }} onActivate={activate} topicName={topic !== "sandbox" ? topicById(topic).name : null} />
 
       <div className="workspace" >
         <LeftBar tools={tools.filter((t) => t.ready)} activeTool={activeTool} onActivate={activate} />
-        {active ? (
-          <CanvasView
-            key={active.id}
-            view={active.view}
-            grid={grid}
-            axes={axes}
-            snap={snap}
-            tool={tool}
-            env={simStatus !== "idle" && simEnvRef.current ? simEnvRef.current : active.env}
-            pins={pins}
-            scene={shownScene}
-            selectedId={selectedItem ? selectedItem.id : null}
-            onView={(view) => updateActive((p) => ({ ...p, view }))}
-            onSize={(s) => {
-              sizeRef.current = s;
-            }}
-            onCursor={setCursor}
-            onSelect={selectItem}
-            overlay={answers}
-            onAddItem={addItemToScene}
-            onBeginEdit={beginEdit}
-            onLiveEdit={(id, fn) => liveEdit((s) => updateItem(s, id, fn), id)}
-            onFinish={() => {
-              setActiveTool("select");
-              setMessage("Select: click an object to see its properties.");
-            }}
-          />
-        ) : (
-          <StartPage onNew={addProject} />
-        )}
+        {canvasNode}
         {headline.some((h) => h.chips.length) && (
           <div className="answer-strip" onClick={() => { setRightTab("answers"); setPropsOpen(true); }} title="Open the Answers">
             {headline.filter((h) => h.chips.length).map((h) => (
@@ -589,6 +862,12 @@ export default function App() {
       />
 
       {envOpen && active && <EnvPanel env={active.env} onChange={changeEnv} onClose={() => setEnvOpen(false)} />}
+
+      <Sheet open={sheet === "menu"} title="Menu" side="left" onClose={closeSheet}>{menuNode}</Sheet>
+      <Sheet open={sheet === "projects"} title="My projects" side="right" onClose={closeSheet}>{projectsNode}</Sheet>
+      <Sheet open={sheet === "topics"} title="Choose a topic" side="right" onClose={closeSheet}>{topicsNode}</Sheet>
+      <Sheet open={sheet === "settings"} title="View, gravity and layout" side="right" onClose={closeSheet}>{settingsNode}</Sheet>
+      <Sheet open={sheet === "help"} title="How to use it" side="right" onClose={closeSheet}>{helpNode}</Sheet>
     </div>
   );
 }
